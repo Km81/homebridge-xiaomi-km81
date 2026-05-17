@@ -1,0 +1,202 @@
+{
+  "pluginAlias": "XiaomiKm81",
+  "pluginType": "platform",
+  "singular": true,
+  "headerDisplay": "Xiaomi 통합 Homebridge 플러그인 (Fan / Air Purifier / Power Strip / Air Monitor / Humidifier). Homebridge 2.0 호환.\n\n각 카테고리별로 필요한 디바이스만 등록하세요. ip 와 token 은 [Xiaomi Cloud Tokens Extractor](https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor) 또는 [homebridge-miot](https://github.com/merdok/homebridge-miot) 등으로 추출할 수 있습니다.",
+  "footerDisplay": "자세한 설정은 [README](https://github.com/Km81/homebridge-xiaomi-km81#설정) 를 참고하세요.",
+  "schema": {
+    "type": "object",
+    "properties": {
+
+      "fans": {
+        "title": "선풍기 (Xiaomi/Smartmi/Dmaker Fans)",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": { "title": "이름", "type": "string", "default": "Xiaomi Fan", "minLength": 1, "required": true },
+            "ip":   { "title": "IP 주소", "type": "string", "format": "ipv4", "required": true },
+            "token":{ "title": "토큰", "type": "string", "pattern": "^[A-Fa-f0-9]{32}$", "required": true },
+            "deviceId": { "title": "Device ID (miot 신형 선풍기)", "type": "string" },
+            "model": { "title": "모델 (예: dmaker.fan.p11)", "type": "string" },
+            "pollingInterval": { "title": "폴링 간격 (초)", "type": "number", "default": 5 },
+            "deepDebugLog":      { "title": "상세 디버그 로그", "type": "boolean" },
+            "buzzerControl":     { "title": "부저 제어 스위치", "type": "boolean", "default": true },
+            "ledControl":        { "title": "LED 제어 스위치", "type": "boolean", "default": true },
+            "naturalModeControl":{ "title": "자연풍 모드 스위치", "type": "boolean", "default": true },
+            "sleepModeControl":  { "title": "수면 모드 스위치", "type": "boolean", "default": true },
+            "moveControl":       { "title": "좌/우 이동 스위치", "type": "boolean", "default": false },
+            "shutdownTimer":     { "title": "꺼짐 예약 타이머", "type": "boolean", "default": false },
+            "ioniserControl":    { "title": "이온 발생기 제어", "type": "boolean", "default": false },
+            "fanLevelControl":   { "title": "풍량 단계 스위치", "type": "boolean", "default": true },
+            "angleButtons":          { "title": "회전 각도 버튼 (배열)", "type": "array", "items": { "type": "integer" } },
+            "verticalAngleButtons":  { "title": "수직 회전 각도 버튼 (배열)", "type": "array", "items": { "type": "integer" } }
+          }
+        }
+      },
+
+      "airPurifiers": {
+        "title": "공기청정기 (Mi Air Purifier 2S / Pro)",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["name", "ip", "token", "type"],
+          "properties": {
+            "name":  { "title": "이름", "type": "string", "default": "Air Purifier" },
+            "ip":    { "title": "IP 주소", "type": "string", "format": "ipv4" },
+            "token": { "title": "토큰", "type": "string", "pattern": "^[A-Fa-f0-9]{32}$" },
+            "type": {
+              "title": "모델",
+              "type": "string",
+              "oneOf": [
+                { "title": "Mi Air Purifier 2S", "enum": ["MiAirPurifier2S"] },
+                { "title": "Mi Air Purifier Pro", "enum": ["MiAirPurifierPro"] }
+              ]
+            },
+            "serialNumber":    { "title": "Serial Number", "type": "string" },
+            "pollingInterval": { "title": "폴링 간격 (ms)", "type": "integer", "default": 15000, "minimum": 3000 },
+
+            "showTemperature": { "title": "온도 센서 표시", "type": "boolean", "default": true },
+            "separateTemperatureAccessory": { "title": "온도 별도 악세서리", "type": "boolean", "default": false, "condition": { "key": "showTemperature", "value": true } },
+            "temperatureName": { "title": "온도 센서 이름", "type": "string", "condition": { "key": "showTemperature", "value": true } },
+
+            "showHumidity": { "title": "습도 센서 표시", "type": "boolean", "default": true },
+            "separateHumidityAccessory": { "title": "습도 별도 악세서리", "type": "boolean", "default": false, "condition": { "key": "showHumidity", "value": true } },
+            "humidityName": { "title": "습도 센서 이름", "type": "string", "condition": { "key": "showHumidity", "value": true } },
+
+            "showAirQuality": { "title": "공기질 센서 표시", "type": "boolean", "default": true },
+            "separateAirQualityAccessory": { "title": "공기질 별도 악세서리", "type": "boolean", "default": false, "condition": { "key": "showAirQuality", "value": true } },
+            "airQualityName": { "title": "공기질 센서 이름", "type": "string", "condition": { "key": "showAirQuality", "value": true } },
+            "airQualityThresholds": {
+              "title": "공기질 임계값 (μg/m³)",
+              "type": "object",
+              "properties": {
+                "t1": { "title": "매우 좋음 상한", "type": "number", "default": 5 },
+                "t2": { "title": "좋음 상한", "type": "number", "default": 15 },
+                "t3": { "title": "보통 상한", "type": "number", "default": 35 },
+                "t4": { "title": "나쁨 상한", "type": "number", "default": 55 }
+              },
+              "condition": { "key": "showAirQuality", "value": true }
+            },
+
+            "showLED": { "title": "LED 스위치 표시", "type": "boolean", "default": false },
+            "separateLedAccessory": { "title": "LED 별도 악세서리", "type": "boolean", "default": false, "condition": { "key": "showLED", "value": true } },
+            "ledName": { "title": "LED 스위치 이름", "type": "string", "condition": { "key": "showLED", "value": true } },
+
+            "showBuzzer": { "title": "부저 스위치 표시", "type": "boolean", "default": false },
+            "separateBuzzerAccessory": { "title": "부저 별도 악세서리", "type": "boolean", "default": false, "condition": { "key": "showBuzzer", "value": true } },
+            "buzzerName": { "title": "부저 스위치 이름", "type": "string", "condition": { "key": "showBuzzer", "value": true } },
+
+            "showAutoModeSwitch": { "title": "자동 모드 스위치 표시", "type": "boolean", "default": false },
+            "separateAutoModeAccessory": { "title": "자동 모드 별도 악세서리", "type": "boolean", "default": false, "condition": { "key": "showAutoModeSwitch", "value": true } },
+            "autoModeName": { "title": "자동 모드 이름", "type": "string", "condition": { "key": "showAutoModeSwitch", "value": true } },
+
+            "showSleepModeSwitch": { "title": "수면 모드 스위치 표시", "type": "boolean", "default": false },
+            "separateSleepModeAccessory": { "title": "수면 모드 별도 악세서리", "type": "boolean", "default": false, "condition": { "key": "showSleepModeSwitch", "value": true } },
+            "sleepModeName": { "title": "수면 모드 이름", "type": "string", "condition": { "key": "showSleepModeSwitch", "value": true } },
+
+            "showFavoriteModeSwitch": { "title": "선호 모드 스위치 표시", "type": "boolean", "default": false },
+            "separateFavoriteModeAccessory": { "title": "선호 모드 별도 악세서리", "type": "boolean", "default": false, "condition": { "key": "showFavoriteModeSwitch", "value": true } },
+            "favoriteModeName": { "title": "선호 모드 이름", "type": "string", "condition": { "key": "showFavoriteModeSwitch", "value": true } }
+          }
+        }
+      },
+
+      "powerStrips": {
+        "title": "멀티탭 / 스마트 플러그 (Mi Power Strip)",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["name", "ip", "token"],
+          "properties": {
+            "name":  { "title": "이름", "type": "string", "default": "Xiaomi Power Strip" },
+            "ip":    { "title": "IP 주소", "type": "string", "format": "ipv4" },
+            "token": { "title": "토큰", "type": "string", "pattern": "^[A-Fa-f0-9]{32}$" },
+            "serialNumber":     { "title": "Serial Number", "type": "string" },
+            "pollingInterval":  { "title": "폴링 주기 (ms)", "type": "integer", "default": 15000, "minimum": 3000 },
+            "model":            { "title": "모델 (예: zimi.powerstrip.v2)", "type": "string" },
+            "protocolMode":     { "title": "프로토콜 모드", "type": "string", "enum": ["auto", "miot", "legacy"], "default": "auto" },
+            "debug":            { "title": "디버그 로그", "type": "boolean", "default": false }
+          }
+        }
+      },
+
+      "airMonitors": {
+        "title": "공기측정기 (Qingping Air Monitor 2 - cgllc.airm.cgs2)",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["name", "ip", "token"],
+          "properties": {
+            "name":     { "title": "이름", "type": "string", "default": "Qingping Air Monitor 2" },
+            "ip":       { "title": "IP 주소", "type": "string", "format": "ipv4" },
+            "token":    { "title": "토큰", "type": "string", "pattern": "^[A-Fa-f0-9]{32}$" },
+            "deviceId": { "title": "Device ID (선택)", "type": "string" },
+            "pollingInterval":          { "title": "폴링 간격 (초)", "type": "integer", "default": 30 },
+            "enableAirQualitySensor":   { "title": "공기질 센서 사용", "type": "boolean", "default": true },
+            "enableTemperatureSensor":  { "title": "온도 센서 사용", "type": "boolean", "default": true },
+            "enableHumiditySensor":     { "title": "습도 센서 사용", "type": "boolean", "default": true },
+            "enableCarbonDioxideSensor":{ "title": "CO2 센서 사용", "type": "boolean", "default": true },
+            "airQualitySensorName":     { "title": "공기질 센서 이름", "type": "string", "default": "공기질" },
+            "temperatureSensorName":    { "title": "온도 센서 이름", "type": "string", "default": "온도" },
+            "humiditySensorName":       { "title": "습도 센서 이름", "type": "string", "default": "습도" },
+            "co2SensorName":            { "title": "CO2 센서 이름", "type": "string", "default": "이산화탄소" },
+            "pm25LimitExcellent": { "title": "PM2.5 매우좋음 상한 (μg/m³)", "type": "integer", "default": 7 },
+            "pm25LimitGood":      { "title": "PM2.5 좋음 상한 (μg/m³)", "type": "integer", "default": 15 },
+            "pm25LimitFair":      { "title": "PM2.5 보통 상한 (μg/m³)", "type": "integer", "default": 30 },
+            "pm25LimitInferior":  { "title": "PM2.5 나쁨 상한 (μg/m³)", "type": "integer", "default": 55 },
+            "co2DetectThreshold": { "title": "CO2 감지 임계값 (ppm)", "type": "integer", "default": 1000 },
+            "co2ClearThreshold":  { "title": "CO2 해제 임계값 (ppm)", "type": "integer", "default": 900 }
+          }
+        }
+      },
+
+      "humidifiers": {
+        "title": "가습기 (Zhimi/Deerma/Shuii series)",
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["name", "ip", "token", "model"],
+          "properties": {
+            "name":  { "title": "이름", "type": "string", "default": "Xiaomi Humidifier" },
+            "ip":    { "title": "IP 주소", "type": "string", "format": "ipv4" },
+            "token": { "title": "토큰", "type": "string", "pattern": "^[A-Fa-f0-9]{32}$" },
+            "deviceId": { "title": "Device ID (선택)", "type": "string" },
+            "model": {
+              "title": "모델",
+              "type": "string",
+              "oneOf": [
+                { "title": "Mi Humidifier (zhimi.humidifier.v1)",       "enum": ["zhimi.humidifier.v1"] },
+                { "title": "Mi Humidifier 2 / Lite (zhimi.humidifier.ca1)", "enum": ["zhimi.humidifier.ca1"] },
+                { "title": "Mi Humidifier 2 EU (zhimi.humidifier.cb1)", "enum": ["zhimi.humidifier.cb1"] },
+                { "title": "Mi Smart Antibacterial Humidifier (zhimi.humidifier.ca4)", "enum": ["zhimi.humidifier.ca4"] },
+                { "title": "Mi MJJSQ (deerma.humidifier.mjjsq)",        "enum": ["deerma.humidifier.mjjsq"] },
+                { "title": "Mi JSQ1 (deerma.humidifier.jsq1)",          "enum": ["deerma.humidifier.jsq1"] },
+                { "title": "Mi JSQ2W (deerma.humidifier.jsq2w)",        "enum": ["deerma.humidifier.jsq2w"] },
+                { "title": "Mi JSQ3 (deerma.humidifier.jsq3)",          "enum": ["deerma.humidifier.jsq3"] },
+                { "title": "Mi JSQ4 (deerma.humidifier.jsq4)",          "enum": ["deerma.humidifier.jsq4"] },
+                { "title": "Mi JSQ5 (deerma.humidifier.jsq5)",          "enum": ["deerma.humidifier.jsq5"] },
+                { "title": "Mi JSQS (deerma.humidifier.jsqs)",          "enum": ["deerma.humidifier.jsqs"] },
+                { "title": "Shuii JSQ001 (shuii.humidifier.jsq001)",    "enum": ["shuii.humidifier.jsq001"] }
+              ]
+            },
+            "serialNumber":            { "title": "Serial Number", "type": "string" },
+            "pollingInterval":         { "title": "폴링 간격 (초)", "type": "integer", "default": 30, "minimum": 5 },
+            "disableTargetHumidity":   { "title": "목표 습도 비활성화", "type": "boolean", "default": false },
+            "autoSwitchToHumidityMode":{ "title": "목표습도 설정 시 자동/습도 모드로 전환", "type": "boolean", "default": true },
+            "enableTemperatureSensor": { "title": "온도 센서 노출", "type": "boolean", "default": false },
+            "temperatureSensorName":   { "title": "온도 센서 이름", "type": "string" },
+            "enableHumiditySensor":    { "title": "별도 습도 센서 노출", "type": "boolean", "default": false },
+            "humiditySensorName":      { "title": "습도 센서 이름", "type": "string" },
+            "enableBuzzerSwitch":      { "title": "부저 스위치 노출", "type": "boolean", "default": false },
+            "buzzerSwitchName":        { "title": "부저 스위치 이름", "type": "string" },
+            "enableLedBulb":           { "title": "LED 전구 노출", "type": "boolean", "default": false },
+            "ledBulbName":             { "title": "LED 이름", "type": "string" },
+            "enableCleanModeSwitch":   { "title": "청소 모드 스위치 노출 (지원 모델)", "type": "boolean", "default": false },
+            "cleanModeSwitchName":     { "title": "청소 모드 스위치 이름", "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}
