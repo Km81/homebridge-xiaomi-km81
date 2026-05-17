@@ -38,7 +38,7 @@
             "serialNumber": { "title": "Serial Number (선택)", "type": "string" },
             "pollingInterval": { "title": "폴링 간격 (초)", "type": "number", "default": 30, "description": "장치 상태를 얼마나 자주 읽을지. 기본 30초." },
 
-            "model": { "title": "[선풍기/멀티탭] 모델명 (선택)", "type": "string", "description": "예: dmaker.fan.p11, zimi.powerstrip.v2. 지정하면 디스커버리 없이 즉시 매칭됩니다." },
+            "model": { "title": "[선풍기/멀티탭] 모델명", "type": "string", "description": "선풍기는 가능한 한 입력하세요 (예: dmaker.fan.p11, dmaker.fan.p5, zhimi.fan.za5, zhimi.fan.v3). 미입력 시 미디바이스 자동 디스커버리를 시도하지만, 신형 miot 선풍기는 Device ID 도 필요해 연결 실패 시 액세서리가 생성되지 않습니다. 멀티탭은 선택사항." },
             "deepDebugLog":       { "title": "[선풍기] 상세 디버그 로그", "type": "boolean" },
             "buzzerControl":      { "title": "[선풍기] 부저 제어 스위치", "type": "boolean", "default": true },
             "ledControl":         { "title": "[선풍기] LED 제어 스위치", "type": "boolean", "default": true },
@@ -160,12 +160,11 @@
     "name",
     {
       "key": "devices",
-      "type": "array",
+      "type": "tabarray",
       "title": "장치 목록",
       "startEmpty": true,
-      "orderable": true,
-      "addButtonText": "장치 추가",
-      "arrayItemCardTitle": "{{name}} ({{deviceType}})",
+      "addButtonText": "+ 장치 추가",
+      "tabTitle": "{{ value.name || '(새 장치)' }}",
       "items": [
         "devices[].deviceType",
 
