@@ -20,60 +20,63 @@ npm i -g homebridge-xiaomi-km81
 
 ## 설정
 
-`config.json` 의 `platforms` 배열에 다음과 같이 추가합니다. 모든 배열은 선택사항이며, 사용하는 카테고리만 채워주세요.
+### 권장: Homebridge UI
+
+1. Homebridge UI → Plugins → `homebridge-xiaomi-km81` → **Settings**
+2. **장치 추가** 버튼 클릭
+3. **장치 종류** 드롭다운에서 선풍기 / 공기청정기 / 멀티탭 / 공기측정기 / 가습기 중 선택
+4. 선택한 종류에 맞는 설정 항목만 동적으로 표시됩니다 (예: 가습기를 고르면 12개 모델 enum + 가습기 전용 옵션만 노출)
+5. 이름 / IP / 토큰 입력 후 저장
+
+### config.json 직접 편집 (v1.1+ 통합 형식 권장)
+
+`platforms` 배열에 다음과 같이 단일 `devices` 배열을 추가합니다. `deviceType` 으로 종류를 구분합니다.
 
 ```jsonc
 {
   "platforms": [
     {
       "platform": "XiaomiKm81",
-
-      "fans": [
+      "name": "Xiaomi KM81",
+      "devices": [
         {
+          "deviceType": "fan",
           "name": "거실 선풍기",
           "ip": "192.168.1.50",
           "token": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
           "model": "dmaker.fan.p11",
           "deviceId": "123456789"
-        }
-      ],
-
-      "airPurifiers": [
+        },
         {
+          "deviceType": "airPurifier",
           "name": "안방 공기청정기",
           "ip": "192.168.1.51",
           "token": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-          "type": "MiAirPurifier2S",
+          "airPurifierType": "MiAirPurifier2S",
           "showTemperature": true,
           "showHumidity": true,
           "showAirQuality": true
-        }
-      ],
-
-      "powerStrips": [
+        },
         {
+          "deviceType": "powerStrip",
           "name": "거실 멀티탭",
           "ip": "192.168.1.52",
           "token": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
           "protocolMode": "auto"
-        }
-      ],
-
-      "airMonitors": [
+        },
         {
+          "deviceType": "airMonitor",
           "name": "거실 공기측정기",
           "ip": "192.168.1.53",
           "token": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
           "deviceId": "123456789"
-        }
-      ],
-
-      "humidifiers": [
+        },
         {
+          "deviceType": "humidifier",
           "name": "침실 가습기",
           "ip": "192.168.1.54",
           "token": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-          "model": "zhimi.humidifier.ca4",
+          "humidifierModel": "zhimi.humidifier.ca4",
           "enableTemperatureSensor": true,
           "enableBuzzerSwitch": true
         }
@@ -83,7 +86,9 @@ npm i -g homebridge-xiaomi-km81
 }
 ```
 
-자세한 옵션은 Homebridge UI 의 설정 화면(`config.schema.json`) 또는 [config 예시](#설정-필드-요약) 를 참고하세요.
+### 레거시 형식 (v1.0 호환)
+
+기존 `fans`/`airPurifiers`/`powerStrips`/`airMonitors`/`humidifiers` 배열 형식도 그대로 지원합니다. 통합 `devices` 배열과 함께 사용해도 OK.
 
 ## 토큰 추출
 
