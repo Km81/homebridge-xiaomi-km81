@@ -59,12 +59,34 @@ class XiaomiKm81Platform {
 
     // 디바이스 카테고리별 설정 정규화
     this.deviceLists = {
-      fans:         this.normalizeArray(this.config.fans),
-      airPurifiers: this.normalizeArray(this.config.airPurifiers),
-      powerStrips:  this.normalizeArray(this.config.powerStrips),
-      airMonitors:  this.normalizeArray(this.config.airMonitors),
-      humidifiers:  this.normalizeArray(this.config.humidifiers),
+      fans: [], airPurifiers: [], powerStrips: [], airMonitors: [], humidifiers: [],
     };
+
+    // 1) 신규 통합 형식: `devices` 배열에서 deviceType 별로 분류 (SmartThings 패턴)
+    //    Homebridge UI 의 드롭다운에서 선택하면 해당 종류의 항목만 노출되도록 schema 가
+    //    조건부로 표시한다. 여기서는 deviceType 으로 분류해 각 헬퍼에 맞는 형식으로 매핑.
+    const unified = this.normalizeArray(this.config.devices);
+    for (const d of unified) {
+      if (!d || !d.deviceType) {
+        this.log.warn(`[XiaomiKm81] devices[]: deviceType 누락 항목 건너뜀 (name=${d && d.name})`);
+        continue;
+      }
+      const bucket = this.bucketForType(d.deviceType);
+      if (!bucket) {
+        this.log.warn(`[XiaomiKm81] devices[]: 알 수 없는 deviceType '${d.deviceType}' (name=${d.name})`);
+        continue;
+      }
+      const mapped = this.mapUnifiedDevice(d);
+      if (mapped) this.deviceLists[bucket].push(mapped);
+    }
+
+    // 2) 레거시 형식 호환: 카테고리별 배열(`fans`/`airPurifiers`/...)도 함께 지원.
+    //    구버전 설정으로도 동작하도록 추가로 누적한다.
+    this.deviceLists.fans.push(...this.normalizeArray(this.config.fans));
+    this.deviceLists.airPurifiers.push(...this.normalizeArray(this.config.airPurifiers));
+    this.deviceLists.powerStrips.push(...this.normalizeArray(this.config.powerStrips));
+    this.deviceLists.airMonitors.push(...this.normalizeArray(this.config.airMonitors));
+    this.deviceLists.humidifiers.push(...this.normalizeArray(this.config.humidifiers));
 
     const total =
       this.deviceLists.fans.length +
@@ -194,6 +216,59 @@ class XiaomiKm81Platform {
   }
 
   /* ---------------- helpers ---------------- */
+
+  /**
+   * deviceType (신규 schema 값) → deviceLists 키 매핑.
+   */
+  bucketForType(t) {
+    switch (t) {
+      case 'fan':         return 'fans';
+      case 'airPurifier': return 'airPurifiers';
+      case 'powerStrip':  return 'powerStrips';
+      case 'airMonitor':  return 'airMonitors';
+      case 'humidifier':  return 'humidifiers';
+      default:            return null;
+    }
+  }
+
+  /**
+   * 신규 통합 schema (devices[].*) → 각 헬퍼가 기대하는 cfg 형식으로 변환.
+   *
+   *  - airPurifier: `airPurifierType` → `type` (헬퍼는 cfg.type 로 모델을 받음)
+   *  - humidifier:  `humidifierModel` → `model` (헬퍼는 cfg.model 로 모델을 받음)
+   *  - airPurifier/powerStrip 의 pollingInterval 은 헬퍼가 ms 단위를 기대하므로
+   *    신규 schema 의 초 단위 입력을 ms 로 환산. 1000 이상은 사용자가 ms 로 입력한
+   *    것으로 간주해 그대로 둔다 (방어 코드, 레거시 호환).
+   */
+  mapUnifiedDevice(d) {
+    const out = Object.assign({}, d);
+    delete out.deviceType;
+    switch (d.deviceType) {
+      case 'fan':
+        return out;
+      case 'airPurifier': {
+        out.type = d.airPurifierType || d.type || 'MiAirPurifier2S';
+        if (Number.isFinite(d.pollingInterval) && d.pollingInterval > 0 && d.pollingInterval < 1000) {
+          out.pollingInterval = d.pollingInterval * 1000;
+        }
+        return out;
+      }
+      case 'powerStrip': {
+        if (Number.isFinite(d.pollingInterval) && d.pollingInterval > 0 && d.pollingInterval < 1000) {
+          out.pollingInterval = d.pollingInterval * 1000;
+        }
+        return out;
+      }
+      case 'airMonitor':
+        return out;
+      case 'humidifier': {
+        out.model = d.humidifierModel || d.model;
+        return out;
+      }
+      default:
+        return null;
+    }
+  }
 
   normalizeArray(v) {
     if (!v) return [];
