@@ -8,7 +8,7 @@
   "schema": {
     "type": "object",
     "properties": {
-      "name": { "title": "플랫폼 이름", "type": "string", "default": "Xiaomi KM81", "required": true },
+      "name": { "title": "플랫폼 이름", "type": "string", "default": "Xiaomi KM81" },
 
       "devices": {
         "type": "array",
@@ -20,20 +20,18 @@
             "deviceType": {
               "title": "장치 종류",
               "type": "string",
-              "default": "fan",
               "oneOf": [
                 { "title": "선풍기 (Smartmi / Mija / Dmaker)", "enum": ["fan"] },
                 { "title": "공기청정기 (Mi Air Purifier 2S / Pro)", "enum": ["airPurifier"] },
                 { "title": "멀티탭 / 스마트 플러그 (Mi Power Strip)", "enum": ["powerStrip"] },
                 { "title": "공기측정기 (Qingping Air Monitor 2)", "enum": ["airMonitor"] },
                 { "title": "가습기 (Zhimi / Deerma / Shuii)", "enum": ["humidifier"] }
-              ],
-              "required": true
+              ]
             },
 
-            "name":  { "title": "이름", "type": "string", "description": "HomeKit에 표시될 액세서리 이름", "minLength": 1, "required": true },
-            "ip":    { "title": "IP 주소", "type": "string", "format": "ipv4", "required": true },
-            "token": { "title": "토큰", "type": "string", "pattern": "^[A-Fa-f0-9]{32}$", "description": "32자리 hex 토큰", "required": true },
+            "name":  { "title": "이름", "type": "string", "description": "HomeKit에 표시될 액세서리 이름", "minLength": 1 },
+            "ip":    { "title": "IP 주소", "type": "string", "format": "ipv4" },
+            "token": { "title": "토큰", "type": "string", "pattern": "^[A-Fa-f0-9]{32}$", "description": "32자리 hex 토큰" },
             "deviceId": { "title": "Device ID (선택)", "type": "string", "description": "miot 신형 디바이스 (선풍기 / 공기측정기 / 가습기) 에서 사용. 보통 자동 감지됨." },
             "serialNumber": { "title": "Serial Number (선택)", "type": "string" },
             "pollingInterval": { "title": "폴링 간격 (초)", "type": "number", "default": 30, "description": "장치 상태를 얼마나 자주 읽을지. 기본 30초." },
@@ -152,8 +150,7 @@
           "required": ["deviceType", "name", "ip", "token"]
         }
       }
-    },
-    "required": ["name"]
+    }
   },
 
   "layout": [
