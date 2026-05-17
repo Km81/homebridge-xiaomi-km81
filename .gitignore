@@ -1,0 +1,29 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+
+# Coverage
+coverage
+.nyc_output
+
+# Dependencies
+node_modules
+jspm_packages
+
+# npm cache / lockfile (intentionally tracked? not in this repo)
+.npm
+
+# Editors
+.vscode
+.idea
+*.swp
+.DS_Store
+
+# OS
+Thumbs.db
