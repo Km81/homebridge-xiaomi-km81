@@ -161,10 +161,9 @@
     {
       "key": "devices",
       "type": "tabarray",
-      "title": "장치 목록",
+      "title": "{{ value.name || '(새 장치)' }}",
       "startEmpty": true,
       "addButtonText": "+ 장치 추가",
-      "tabTitle": "{{ value.name || '(새 장치)' }}",
       "items": [
         "devices[].deviceType",
 
