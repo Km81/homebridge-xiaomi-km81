@@ -32,6 +32,20 @@ const HumidifierAccessory = require('./lib/humidifier/HumidifierAccessory.js');
 const PLUGIN_NAME = packageJson.name;          // homebridge-xiaomi-km81
 const PLATFORM_NAME = 'XiaomiKm81';            // pluginAlias in config.schema.json
 
+// deviceType 별 권장 폴링 간격 (초). config 에 pollingInterval 이 비어 있으면 이 값을 사용.
+//  - fan         : 5초  — 물리 버튼/리모컨 변경을 빠르게 반영해야 함
+//  - airPurifier : 10초 — 모드/풍량 변동 빈도가 낮음
+//  - powerStrip  : 10초 — 콘센트 상태 변동 빈도가 낮음
+//  - airMonitor  : 30초 — PM2.5/온도/습도/CO2 는 분 단위로 천천히 변함
+//  - humidifier  : 10초 — 습도/모드는 천천히 변하지만 물탱크 상태는 빠르게 알고 싶음
+const RECOMMENDED_POLL_SEC = {
+  fan: 5,
+  airPurifier: 10,
+  powerStrip: 10,
+  airMonitor: 30,
+  humidifier: 10,
+};
+
 let Homebridge;
 
 module.exports = (homebridge) => {
@@ -234,6 +248,7 @@ class XiaomiKm81Platform {
   /**
    * 신규 통합 schema (devices[].*) → 각 헬퍼가 기대하는 cfg 형식으로 변환.
    *
+   *  - 폴링 간격이 비어 있거나 0 이하이면 deviceType 별 권장값(RECOMMENDED_POLL_SEC)으로 채움.
    *  - airPurifier: `airPurifierType` → `type` (헬퍼는 cfg.type 로 모델을 받음)
    *  - humidifier:  `humidifierModel` → `model` (헬퍼는 cfg.model 로 모델을 받음)
    *  - airPurifier/powerStrip 의 pollingInterval 은 헬퍼가 ms 단위를 기대하므로
@@ -243,19 +258,26 @@ class XiaomiKm81Platform {
   mapUnifiedDevice(d) {
     const out = Object.assign({}, d);
     delete out.deviceType;
+
+    // 폴링 간격이 비어 있으면 deviceType 별 권장 기본값으로 채움 (초 단위)
+    if (!Number.isFinite(out.pollingInterval) || out.pollingInterval <= 0) {
+      const def = RECOMMENDED_POLL_SEC[d.deviceType];
+      if (def) out.pollingInterval = def;
+    }
+
     switch (d.deviceType) {
       case 'fan':
         return out;
       case 'airPurifier': {
         out.type = d.airPurifierType || d.type || 'MiAirPurifier2S';
-        if (Number.isFinite(d.pollingInterval) && d.pollingInterval > 0 && d.pollingInterval < 1000) {
-          out.pollingInterval = d.pollingInterval * 1000;
+        if (Number.isFinite(out.pollingInterval) && out.pollingInterval > 0 && out.pollingInterval < 1000) {
+          out.pollingInterval = out.pollingInterval * 1000;
         }
         return out;
       }
       case 'powerStrip': {
-        if (Number.isFinite(d.pollingInterval) && d.pollingInterval > 0 && d.pollingInterval < 1000) {
-          out.pollingInterval = d.pollingInterval * 1000;
+        if (Number.isFinite(out.pollingInterval) && out.pollingInterval > 0 && out.pollingInterval < 1000) {
+          out.pollingInterval = out.pollingInterval * 1000;
         }
         return out;
       }
