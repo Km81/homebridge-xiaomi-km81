@@ -4,7 +4,7 @@ Xiaomi 5종(선풍기 / 공기청정기 / 멀티탭 / 공기측정기 / 가습�
 
 | 카테고리       | 지원 디바이스                                              |
 |----------------|------------------------------------------------------------|
-| Fan            | Smartmi / Mija / Dmaker 시리즈 (zhimi.fan.*, dmaker.fan.*) |
+| Fan            | Smartmi / Mija / Dmaker 시리즈 (zhimi.fan.*, dmaker.fan.*), Xiaomi Smart Tower Fan 2 (xiaomi.fan.p45) |
 | Air Purifier   | Mi Air Purifier 2S, Pro                                    |
 | Power Strip    | Mi Power Strip / Smart Plug (miot · legacy 자동 감지)      |
 | Air Monitor    | Qingping Air Monitor 2 (cgllc.airm.cgs2)                   |
