@@ -50,6 +50,8 @@
             "fanLevelControl":    { "title": "[선풍기] 풍량 단계 스위치", "type": "boolean", "default": true },
             "angleButtons":         { "title": "[선풍기] 회전 각도 버튼 (배열)", "type": "array", "items": { "type": "integer" } },
             "verticalAngleButtons": { "title": "[선풍기] 수직 회전 각도 버튼 (배열)", "type": "array", "items": { "type": "integer" } },
+            "angleLightbulb":       { "title": "[선풍기] 회전 각도 전구(슬라이더) 사용", "type": "boolean", "default": false },
+            "angleLightbulbLevels": { "title": "[선풍기] 회전 각도 전구 - 각도 단계 (배열)", "type": "array", "items": { "type": "integer" } },
 
             "airPurifierType": {
               "title": "[공기청정기] 모델",
@@ -200,6 +202,19 @@
             { "key": "devices[].verticalAngleButtons[]", "title": "수직 각도 (°)", "placeholder": "예: 45" }
           ],
           "condition": { "functionBody": "return model.devices[arrayIndices[0]] && model.devices[arrayIndices[0]].deviceType==='fan';" } },
+        { "key": "devices[].angleLightbulb",
+          "title": "[선풍기] 회전 각도 전구(슬라이더) 사용",
+          "description": "회전 각도를 전구 밝기 슬라이더 하나로 조절합니다. 전구 On/Off = 회전 On/Off, 밝기(1~100%) = 회전 각도이며 지원 각도 단계로 자동 스냅됩니다(예: 1~30→30°, 31~60→60°, 61~90→90°, 91~100→최대각). HomeKit 밝기는 0~100 범위라 100°를 넘는 각도(120/150)는 100%로 표시됩니다. 각도 버튼과 함께 사용할 수 있습니다.",
+          "condition": { "functionBody": "return model.devices[arrayIndices[0]] && model.devices[arrayIndices[0]].deviceType==='fan';" } },
+        { "key": "devices[].angleLightbulbLevels",
+          "type": "array",
+          "title": "[선풍기] 회전 각도 전구 - 각도 단계 (선택)",
+          "description": "전구 슬라이더가 사용할 각도 단계를 직접 지정합니다. 미지정 시 모델 기본값을 사용합니다. 100°를 넘는 단계가 여러 개면 가장 큰 값 하나만 사용됩니다(예: 30/60/90/120/150 → 30/60/90/150).",
+          "addButtonText": "각도 단계 추가",
+          "items": [
+            { "key": "devices[].angleLightbulbLevels[]", "title": "각도 (°)", "placeholder": "예: 90" }
+          ],
+          "condition": { "functionBody": "var d=model.devices[arrayIndices[0]]; return d && d.deviceType==='fan' && d.angleLightbulb===true;" } },
 
         { "key": "devices[].airPurifierType", "type": "select",
           "condition": { "functionBody": "return model.devices[arrayIndices[0]] && model.devices[arrayIndices[0]].deviceType==='airPurifier';" } },
