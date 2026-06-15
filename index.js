@@ -111,8 +111,9 @@ class XiaomiKm81Platform {
 
     if (total === 0) {
       this.log.warn(
-        '[XiaomiKm81] 설정된 장치가 없습니다. config.json의 platform 항목에 ' +
-        'fans / airPurifiers / powerStrips / airMonitors / humidifiers 배열을 추가하세요.'
+        '[XiaomiKm81] 설정된 장치가 없습니다. Homebridge UI에서 장치를 추가하거나, ' +
+        'config.json의 platform 항목에 devices 배열(각 항목에 deviceType 지정)을 추가하세요. ' +
+        '(레거시 형식인 fans / airPurifiers / powerStrips / airMonitors / humidifiers 배열도 지원됩니다.)'
       );
     } else {
       this.log.info(
