@@ -1,6 +1,6 @@
 {
   "name": "homebridge-xiaomi-km81",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "Unified Homebridge plugin for Xiaomi devices: Fan, Air Purifier, Power Strip, Air Monitor, Humidifier. Homebridge 2.0 compatible.",
   "main": "index.js",
   "engines": {
