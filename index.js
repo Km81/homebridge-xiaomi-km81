@@ -141,36 +141,65 @@ class XiaomiKm81Platform {
     this.accessories.set(accessory.UUID, accessory);
   }
 
-  // MiCloud(클라우드) 세션 초기화. config 의 micloud 에 username/password 가 있으면 로그인 시도.
-  // 클라우드 제어(forceMiCloud)가 필요한 신형 기기(예: xiaomi.fan.p45)를 위해 사용한다.
+  // MiCloud(클라우드) 세션 초기화.
+  // - 강제 2FA 계정: tools/micloud-login.js 로 만든 세션 캐시 파일(storage 폴더의
+  //   xiaomi-km81-micloud-session.json) 또는 config 의 micloud.serviceToken 으로 인증.
+  // - 비2FA 계정: username/password 로 로그인하고 성공 시 세션을 캐시 파일에 저장.
   initMiCloud() {
+    const fs = require('fs');
+    const path = require('path');
     const mc = this.config.micloud || null;
     this.miCloud = null;
-    if (!mc || !mc.username || !mc.password) return;
+
+    let sessionFile = null;
+    try { sessionFile = path.join(this.api.user.storagePath(), 'xiaomi-km81-micloud-session.json'); } catch (_) {}
+
+    let cached = null;
+    if (sessionFile) {
+      try { if (fs.existsSync(sessionFile)) cached = JSON.parse(fs.readFileSync(sessionFile, 'utf8')); }
+      catch (e) { this.log.warn(`[XiaomiKm81] MiCloud 세션 캐시 읽기 실패: ${e.message || e}`); }
+    }
+    const cfgToken = (mc && mc.serviceToken && typeof mc.serviceToken === 'object') ? mc.serviceToken : null;
+    const hasCreds = !!(mc && mc.username && mc.password);
+    if (!hasCreds && !cached && !cfgToken) return;   // micloud 미사용
+
     try {
       const logger = {
         debug: (...a) => this.log.debug('[MiCloud]', ...a),
-        deepDebug: (...a) => { if (mc.debug) this.log.debug('[MiCloud]', ...a); },
+        deepDebug: (...a) => { if (mc && mc.debug) this.log.debug('[MiCloud]', ...a); },
         info: (...a) => this.log.info('[MiCloud]', ...a),
       };
       const miCloud = new MiCloud(logger);
-      miCloud.setCountry((mc.country || 'cn').toString().toLowerCase());
-      if (mc.serviceToken && typeof mc.serviceToken === 'object') {
-        miCloud.setServiceToken(mc.serviceToken);   // 고급: 미리 받은 세션(2FA 계정 등)
-      }
+      const country = (cfgToken && mc && mc.country) || (cached && cached.country) || (mc && mc.country) || 'cn';
+      miCloud.setCountry(String(country).toLowerCase());
+      // 우선순위: config serviceToken > 캐시 파일 세션
+      if (cfgToken) miCloud.setServiceToken(cfgToken);
+      else if (cached && cached.session) miCloud.setServiceToken(cached.session);
       this.miCloud = miCloud;
+
       if (miCloud.isLoggedIn()) {
-        this.log.info('[XiaomiKm81] MiCloud 캐시 세션 사용');
-      } else {
+        this.log.info('[XiaomiKm81] MiCloud 캐시 세션 사용 중');
+      } else if (hasCreds) {
         miCloud.login(mc.username, mc.password)
-          .then(() => this.log.info('[XiaomiKm81] MiCloud 로그인 성공'))
+          .then(() => {
+            this.log.info('[XiaomiKm81] MiCloud 로그인 성공');
+            if (sessionFile) {
+              try {
+                fs.writeFileSync(sessionFile, JSON.stringify({ country: miCloud.country, session: miCloud.getServiceToken() }, null, 2) + '\n');
+                this.log.info('[XiaomiKm81] MiCloud 세션을 캐시에 저장했습니다');
+              } catch (_) {}
+            }
+          })
           .catch(err => {
             if (err && err.notificationUrl) {
-              this.log.error('[XiaomiKm81] MiCloud 2단계 인증(2FA)이 필요합니다. 2FA 가 켜진 계정은 config 만으로는 로그인할 수 없습니다(미리 받은 serviceToken 필요). ' + err.message);
+              this.log.error('[XiaomiKm81] MiCloud 2단계 인증(2FA)이 필요합니다. tools/micloud-login.js 를 한 번 실행해 세션을 만든 뒤 ' +
+                `'${sessionFile || 'storage'}' 위치에 두세요. ` + err.message);
             } else {
               this.log.error(`[XiaomiKm81] MiCloud 로그인 실패: ${err && err.message || err}`);
             }
           });
+      } else {
+        this.log.warn('[XiaomiKm81] MiCloud 세션이 없습니다. tools/micloud-login.js 로 세션을 만들어 storage 폴더에 두세요.');
       }
     } catch (e) {
       this.log.error(`[XiaomiKm81] MiCloud 초기화 실패: ${e.message || e}`);

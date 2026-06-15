@@ -113,7 +113,12 @@ npm i -g homebridge-xiaomi-km81
 3. 그러면 그 기기는 로컬 대신 **클라우드로 폴링/제어**합니다(로컬 끊김의 영향을 안 받음).
 
 주의:
-- **2단계 인증(2FA)이 켜진 계정은 config 만으로 로그인할 수 없습니다.**
+- **2단계 인증(2FA)이 켜진 계정**(샤오미가 일부 지역에 강제 적용)은 config 의 ID/PW만으로 로그인이 안 됩니다. 대신 **세션 캐시**를 한 번 만들면 됩니다 — Homebridge 호스트에서:
+  ```bash
+  node tools/micloud-login.js --country sg
+  ```
+  Mi 계정/비밀번호 → 2FA 인증 URL → 인증코드 입력을 거쳐 세션 파일을 만듭니다. 그 파일을 Homebridge storage 폴더(예: `~/.homebridge/`)에 **`xiaomi-km81-micloud-session.json`** 이름으로 두면, 플러그인이 자동으로 그 세션으로 인증합니다(재시작해도 유지). 세션 만료 시 다시 실행하세요. (또는 출력된 JSON을 config 의 `micloud.serviceToken` 에 넣어도 됩니다.)
+- 비2FA 계정은 config 의 username/password 로 로그인하며, 성공한 세션을 자동으로 위 캐시 파일에 저장합니다.
 - 비밀번호가 config.json에 평문 저장되니 유의하세요.
 - 로컬이 안정적인 기기는 켤 필요 없습니다(로컬이 더 빠름).
 
