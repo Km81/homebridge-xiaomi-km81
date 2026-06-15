@@ -28,6 +28,7 @@ const AirPurifierAccessory = require('./lib/airpurifier/AirPurifierAccessory.js'
 const PowerStripAccessory = require('./lib/powerstrip/PowerStripAccessory.js');
 const AirMonitorAccessory = require('./lib/airmonitor/AirMonitorAccessory.js');
 const HumidifierAccessory = require('./lib/humidifier/HumidifierAccessory.js');
+const MiCloud = require('./lib/common/MiCloud.js');
 
 const PLUGIN_NAME = packageJson.name;          // homebridge-xiaomi-km81
 const PLATFORM_NAME = 'XiaomiKm81';            // pluginAlias in config.schema.json
@@ -140,11 +141,50 @@ class XiaomiKm81Platform {
     this.accessories.set(accessory.UUID, accessory);
   }
 
+  // MiCloud(클라우드) 세션 초기화. config 의 micloud 에 username/password 가 있으면 로그인 시도.
+  // 클라우드 제어(forceMiCloud)가 필요한 신형 기기(예: xiaomi.fan.p45)를 위해 사용한다.
+  initMiCloud() {
+    const mc = this.config.micloud || null;
+    this.miCloud = null;
+    if (!mc || !mc.username || !mc.password) return;
+    try {
+      const logger = {
+        debug: (...a) => this.log.debug('[MiCloud]', ...a),
+        deepDebug: (...a) => { if (mc.debug) this.log.debug('[MiCloud]', ...a); },
+        info: (...a) => this.log.info('[MiCloud]', ...a),
+      };
+      const miCloud = new MiCloud(logger);
+      miCloud.setCountry((mc.country || 'cn').toString().toLowerCase());
+      if (mc.serviceToken && typeof mc.serviceToken === 'object') {
+        miCloud.setServiceToken(mc.serviceToken);   // 고급: 미리 받은 세션(2FA 계정 등)
+      }
+      this.miCloud = miCloud;
+      if (miCloud.isLoggedIn()) {
+        this.log.info('[XiaomiKm81] MiCloud 캐시 세션 사용');
+      } else {
+        miCloud.login(mc.username, mc.password)
+          .then(() => this.log.info('[XiaomiKm81] MiCloud 로그인 성공'))
+          .catch(err => {
+            if (err && err.notificationUrl) {
+              this.log.error('[XiaomiKm81] MiCloud 2단계 인증(2FA)이 필요합니다. 2FA 가 켜진 계정은 config 만으로는 로그인할 수 없습니다(미리 받은 serviceToken 필요). ' + err.message);
+            } else {
+              this.log.error(`[XiaomiKm81] MiCloud 로그인 실패: ${err && err.message || err}`);
+            }
+          });
+      }
+    } catch (e) {
+      this.log.error(`[XiaomiKm81] MiCloud 초기화 실패: ${e.message || e}`);
+      this.miCloud = null;
+    }
+  }
+
   initDevices() {
     const usedUUIDs = new Set();
 
+    this.initMiCloud();
+
     // 각 유형별 액세서리 초기화. 헬퍼 클래스는 항상 동일한 ctx 형태를 받는다.
-    // ctx = { platform, api, log, hap, PLUGIN_NAME, PLATFORM_NAME, accessoriesMap }
+    // ctx = { platform, api, log, hap, PLUGIN_NAME, PLATFORM_NAME, accessoriesMap, miCloud }
     const ctx = {
       api: this.api,
       log: this.log,
@@ -153,6 +193,7 @@ class XiaomiKm81Platform {
       PLATFORM_NAME,
       accessories: this.accessories,
       packageVersion: packageJson.version,
+      miCloud: this.miCloud,
     };
 
     for (const cfg of this.deviceLists.fans) {

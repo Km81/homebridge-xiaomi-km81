@@ -10,6 +10,31 @@
     "properties": {
       "name": { "title": "플랫폼 이름", "type": "string", "default": "Xiaomi KM81", "required": true },
 
+      "micloud": {
+        "title": "MiCloud (클라우드 제어)",
+        "type": "object",
+        "description": "로컬(LAN) 연결이 불안정한 신형 기기(예: xiaomi.fan.p45)를 클라우드로 제어할 때 사용합니다. Mi 계정 정보를 입력하고, 해당 기기의 선풍기 설정에서 'MiCloud로 제어'를 켜세요. (2단계 인증이 켜진 계정은 현재 미지원)",
+        "properties": {
+          "username": { "title": "Mi 계정 (이메일/아이디)", "type": "string" },
+          "password": { "title": "Mi 비밀번호", "type": "string" },
+          "country": {
+            "title": "지역 서버", "type": "string", "default": "cn",
+            "description": "기기가 등록된 Mi Home 지역. 한국 사용자는 보통 cn 또는 sg.",
+            "oneOf": [
+              { "title": "중국 (cn)", "enum": ["cn"] },
+              { "title": "싱가포르 (sg)", "enum": ["sg"] },
+              { "title": "독일 (de)", "enum": ["de"] },
+              { "title": "미국 (us)", "enum": ["us"] },
+              { "title": "러시아 (ru)", "enum": ["ru"] },
+              { "title": "대만 (tw)", "enum": ["tw"] },
+              { "title": "인도 (in)", "enum": ["in"] },
+              { "title": "i2", "enum": ["i2"] }
+            ]
+          },
+          "debug": { "title": "MiCloud 디버그 로그", "type": "boolean", "default": false }
+        }
+      },
+
       "devices": {
         "type": "array",
         "title": "장치 목록",
@@ -52,6 +77,7 @@
             "verticalAngleButtons": { "title": "[선풍기] 수직 회전 각도 버튼 (배열)", "type": "array", "items": { "type": "integer" } },
             "angleLightbulb":       { "title": "[선풍기] 회전 각도 전구(슬라이더) 사용", "type": "boolean" },
             "angleLightbulbLevels": { "title": "[선풍기] 회전 각도 전구 - 각도 단계 (배열)", "type": "array", "items": { "type": "integer" } },
+            "forceMiCloud": { "title": "[선풍기] MiCloud(클라우드)로 제어", "type": "boolean", "default": false },
 
             "airPurifierType": {
               "title": "[공기청정기] 모델",
@@ -154,6 +180,14 @@
   "layout": [
     "name",
     {
+      "type": "fieldset",
+      "title": "MiCloud (클라우드 제어 · 선택)",
+      "expandable": true,
+      "expanded": false,
+      "description": "로컬 연결이 불안정한 신형 기기(예: xiaomi.fan.p45)를 클라우드로 제어할 때만 입력하세요.",
+      "items": [ "micloud.username", "micloud.password", "micloud.country", "micloud.debug" ]
+    },
+    {
       "key": "devices",
       "type": "tabarray",
       "title": "{{ value.name || value.ip || ('장치 ' + ($index + 1)) }}",
@@ -203,6 +237,10 @@
         { "key": "devices[].angleLightbulb",
           "title": "[선풍기] 회전 각도 전구(슬라이더) 사용",
           "description": "회전 각도를 전구 밝기 슬라이더 하나로 조절합니다. 전구 On/Off = 회전 On/Off, 밝기(1~100%) = 회전 각도이며 지원 각도 단계로 자동 스냅됩니다(예: 1~30→30°, 31~60→60°, 61~90→90°, 91~100→최대각). HomeKit 밝기는 0~100 범위라 100°를 넘는 각도(120/150)는 100%로 표시됩니다. 각도 버튼과 함께 사용할 수 있습니다.",
+          "condition": { "functionBody": "return model.devices[arrayIndices[0]] && model.devices[arrayIndices[0]].deviceType==='fan';" } },
+        { "key": "devices[].forceMiCloud",
+          "title": "[선풍기] MiCloud(클라우드)로 제어",
+          "description": "로컬 연결이 자주 끊기는 신형 기기(예: xiaomi.fan.p45)를 클라우드로 제어합니다. 상단의 MiCloud 계정 정보와 model, Device ID 가 필요합니다.",
           "condition": { "functionBody": "return model.devices[arrayIndices[0]] && model.devices[arrayIndices[0]].deviceType==='fan';" } },
         { "key": "devices[].angleLightbulbLevels",
           "type": "array",
