@@ -225,6 +225,27 @@ class XiaomiKm81Platform {
       miCloud: this.miCloud,
     };
 
+    // 같은 기기를 레거시 배열과 통합 devices 배열에(혹은 한 배열에 두 번) 중복 등록하면
+    // 동일 기기에 대해 폴링 루프가 둘 돌아 트래픽/낙관적 UI 충돌이 생긴다. 기기당 IP 는
+    // 유일하므로 IP 기준으로 중복 항목을 한 번만 남긴다.
+    const seenIps = new Set();
+    const dedupe = (list, label) => (Array.isArray(list) ? list : []).filter(cfg => {
+      const ip = cfg && cfg.ip;
+      if (!ip) return true;
+      const key = String(ip).trim().toLowerCase();
+      if (seenIps.has(key)) {
+        this.log.warn(`[XiaomiKm81] ${label} '${(cfg && cfg.name) || ip}' 는 IP ${ip} 가 이미 등록되어 건너뜁니다 (중복).`);
+        return false;
+      }
+      seenIps.add(key);
+      return true;
+    });
+    this.deviceLists.fans = dedupe(this.deviceLists.fans, 'Fan');
+    this.deviceLists.airPurifiers = dedupe(this.deviceLists.airPurifiers, 'AirPurifier');
+    this.deviceLists.powerStrips = dedupe(this.deviceLists.powerStrips, 'PowerStrip');
+    this.deviceLists.airMonitors = dedupe(this.deviceLists.airMonitors, 'AirMonitor');
+    this.deviceLists.humidifiers = dedupe(this.deviceLists.humidifiers, 'Humidifier');
+
     for (const cfg of this.deviceLists.fans) {
       this.tryInit('Fan', cfg, () => {
         const uuid = FanAccessory.computeUUID(this.api.hap, cfg);

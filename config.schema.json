@@ -13,7 +13,7 @@
       "micloud": {
         "title": "MiCloud (클라우드 제어)",
         "type": "object",
-        "description": "로컬(LAN) 연결이 불안정한 신형 기기(예: xiaomi.fan.p45)를 클라우드로 제어할 때 사용합니다. Mi 계정 정보를 입력하고, 해당 기기의 선풍기 설정에서 'MiCloud로 제어'를 켜세요. (2단계 인증이 켜진 계정은 현재 미지원)",
+        "description": "로컬(LAN)이 원천 차단된 환경에서 기기를 클라우드로 제어할 때 사용합니다(대부분의 기기는 로컬로 안정 동작하므로 불필요). Mi 계정 정보를 입력하고 해당 기기 설정에서 'MiCloud로 제어'를 켜세요. 2단계 인증(2FA) 계정은 'node tools/micloud-login.js'로 세션 캐시를 한 번 만들면 됩니다(README 참고).",
         "properties": {
           "username": { "title": "Mi 계정 (이메일/아이디)", "type": "string" },
           "password": { "title": "Mi 비밀번호", "type": "string" },
