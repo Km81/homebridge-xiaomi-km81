@@ -260,8 +260,11 @@ class XiaomiKm81Platform {
     const out = Object.assign({}, d);
     delete out.deviceType;
 
-    // 폴링 간격이 비어 있으면 deviceType 별 권장 기본값으로 채움 (초 단위)
-    if (!Number.isFinite(out.pollingInterval) || out.pollingInterval <= 0) {
+    // 폴링 간격: UI/config 에서 문자열("10")로 들어올 수 있으므로 숫자로 정규화한다.
+    // 비었거나 유효하지 않으면 deviceType 별 권장 기본값으로 채움 (초 단위).
+    const pi = Number(out.pollingInterval);
+    out.pollingInterval = (Number.isFinite(pi) && pi > 0) ? pi : undefined;
+    if (out.pollingInterval === undefined) {
       const def = RECOMMENDED_POLL_SEC[d.deviceType];
       if (def) out.pollingInterval = def;
     }
