@@ -73,6 +73,17 @@
     </div>
   </div>
 
+  <div class="km81-card">
+    <h4>등록된 기기 검출 (IP · 토큰 · 서버)</h4>
+    <p class="km81-muted">
+      로그인 후, 계정에 등록된 기기들의 <b>IP · 토큰 · 모델 · Device ID</b> 와 각 기기가 등록된 <b>지역(서버)</b>을 찾아줍니다.
+      여러 지역을 조회하므로 수십 초 걸릴 수 있어요. <b>자동 등록은 하지 않습니다</b> — 값을 복사해 아래 장치 설정에 직접 넣으세요.
+    </p>
+    <button id="scanBtn" class="btn btn-primary">기기 불러오기 / 서버 검출</button>
+    <div id="scanErrors" class="km81-muted" style="margin-top:8px;"></div>
+    <div id="devTableWrap" style="margin-top:12px; overflow-x:auto;"></div>
+  </div>
+
   <script>
     (async () => {
       const $ = (id) => document.getElementById(id);
@@ -157,6 +168,47 @@
         catch (e) { homebridge.toast.error(e.message || '삭제 실패'); }
         homebridge.hideSpinner();
         refreshStatus();
+      });
+
+      // ---- 기기/서버 검출 ----
+      function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+      function renderDevices(devices){
+        if (!devices || !devices.length) { $('devTableWrap').innerHTML = '<div class="km81-muted">기기를 찾지 못했습니다.</div>'; return; }
+        let h = '<table class="table table-sm"><thead><tr><th>이름</th><th>모델</th><th>Device ID</th><th>IP</th><th>토큰</th><th>서버</th></tr></thead><tbody>';
+        for (const d of devices) {
+          h += '<tr>'
+            + '<td>' + esc(d.name) + (d.online ? '' : ' <span class="km81-muted">(오프라인)</span>') + '</td>'
+            + '<td>' + esc(d.model) + '</td>'
+            + '<td><code>' + esc(d.did) + '</code></td>'
+            + '<td><code>' + esc(d.ip) + '</code></td>'
+            + '<td><code>' + esc(d.token) + '</code> <button class="btn btn-link btn-sm km81-copy" data-v="' + esc(d.token) + '">복사</button></td>'
+            + '<td><b>' + esc(d.country) + '</b></td>'
+            + '</tr>';
+        }
+        h += '</tbody></table>';
+        $('devTableWrap').innerHTML = h;
+      }
+
+      $('scanBtn').addEventListener('click', async () => {
+        $('scanErrors').textContent = '';
+        homebridge.showSpinner();
+        let res;
+        try { res = await homebridge.request('/devices'); }
+        catch (e) { homebridge.hideSpinner(); homebridge.toast.error(e.message || '요청 실패'); return; }
+        homebridge.hideSpinner();
+        if (!res || !res.ok) { homebridge.toast.error((res && res.message) || '기기 조회 실패'); return; }
+        renderDevices(res.devices);
+        if (res.errors && res.errors.length) $('scanErrors').textContent = '일부 지역 조회 실패: ' + res.errors.join(' · ');
+        homebridge.toast.success((res.devices ? res.devices.length : 0) + '개 기기를 찾았습니다.');
+      });
+
+      $('devTableWrap').addEventListener('click', (ev) => {
+        const b = ev.target.closest && ev.target.closest('.km81-copy');
+        if (!b) return;
+        const v = b.getAttribute('data-v') || '';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(v).then(() => homebridge.toast.success('토큰을 복사했습니다.')).catch(() => homebridge.toast.error('복사 실패'));
+        } else { homebridge.toast.info(v); }
       });
 
       await refreshStatus();

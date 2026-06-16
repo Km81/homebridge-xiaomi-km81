@@ -25,6 +25,7 @@ class UiServer extends HomebridgePluginUiServer {
     this.onRequest('/login', this.handleLogin.bind(this));
     this.onRequest('/submitTicket', this.handleSubmitTicket.bind(this));
     this.onRequest('/clear', this.handleClear.bind(this));
+    this.onRequest('/devices', this.handleDevices.bind(this));
 
     this.ready();
   }
@@ -97,6 +98,61 @@ class UiServer extends HomebridgePluginUiServer {
     } catch (e) {
       return { ok: false, message: `2단계 인증 실패: ${(e && e.message) || e}` };
     }
+  }
+
+  _loadSession() {
+    try {
+      const p = this._sessionPath();
+      if (fs.existsSync(p)) {
+        const j = JSON.parse(fs.readFileSync(p, 'utf8'));
+        if (j && j.session) return j;
+      }
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+
+  // 저장된 세션으로 여러 지역 서버를 조회해 계정에 등록된 기기(이름/모델/deviceId/IP/토큰)와
+  // 각 기기가 실제로 등록된 지역(서버)을 검출한다. 자동 등록은 하지 않는다(값 확인용).
+  async handleDevices(payload) {
+    const sess = this._loadSession();
+    if (!sess) return { ok: false, message: '먼저 위에서 로그인해 세션을 만드세요.' };
+
+    const miCloud = new MiCloud(this._quietLogger());
+    miCloud.setServiceToken(sess.session);
+    if (!miCloud.isLoggedIn()) return { ok: false, message: '세션이 유효하지 않습니다. 다시 로그인하세요.' };
+
+    const countries = (payload && Array.isArray(payload.countries) && payload.countries.length)
+      ? payload.countries.filter(c => miCloud.availableCountries.includes(c))
+      : miCloud.availableCountries;
+
+    const byDid = new Map();
+    const errors = [];
+    for (const c of countries) {
+      try {
+        miCloud.setCountry(c);
+        const list = await miCloud.getDevices();
+        if (Array.isArray(list)) {
+          for (const d of list) {
+            const did = String(d.did);
+            if (byDid.has(did)) continue;   // 기기는 한 지역에만 등록됨 — 먼저 찾은 지역이 실제 서버
+            byDid.set(did, {
+              name: d.name || '',
+              model: d.model || '',
+              did,
+              ip: d.localip || '',
+              token: d.token || '',
+              online: !!d.isOnline,
+              country: c,
+            });
+          }
+        }
+      } catch (e) {
+        errors.push(`${c}: ${(e && e.message) || e}`);
+      }
+    }
+    const devices = Array.from(byDid.values())
+      .sort((a, b) => (a.country + a.name).localeCompare(b.country + b.name));
+    return { ok: true, devices, scanned: countries, errors };
   }
 
   async handleClear() {
