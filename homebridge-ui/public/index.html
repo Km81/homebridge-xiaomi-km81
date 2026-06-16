@@ -83,6 +83,20 @@
       }
       function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
+      // 세션 상태를 브라우저에 캐시해, 설정 화면을 열 때 서버(도우미 프로세스) spawn 을
+      // 기다리지 않고 즉시 표시한다. 서버 확인은 백그라운드로 갱신.
+      function loadCache() { try { return JSON.parse(localStorage.getItem('km81_sess') || 'null'); } catch (e) { return null; } }
+      function saveCache(o) { try { localStorage.setItem('km81_sess', JSON.stringify(o)); } catch (e) { } }
+      function renderStatus(s, note) {
+        if (s && s.exists) {
+          setStatus('ok', '세션 저장됨 ✓  지역: ' + (s.country || '?') + (s.userId ? (',  userId: ' + s.userId) : '') + (s.loggedInAt ? (',  로그인: ' + s.loggedInAt) : '') + (note ? ('  ' + note) : ''));
+          $('clearRow').classList.remove('km81-hidden');
+        } else {
+          setStatus('none', '저장된 세션이 없습니다. 아래에서 로그인하세요.' + (note ? ('  ' + note) : ''));
+          $('clearRow').classList.add('km81-hidden');
+        }
+      }
+
       var defaultCountry = null;
       var schemaShown = false;
       var wired = false;
@@ -100,25 +114,25 @@
       async function refreshStatus() {
         if (_statusRunning) return;
         _statusRunning = true;
-        // UI 서버는 설정 화면을 열 때 새로 spawn 되는데, NAS 등에서 cold-start 가 느리면
-        // 첫 요청이 타임아웃될 수 있다. 한 번 살아나면 이후엔 빠르므로 여러 번 재시도한다.
-        var attempts = 5;
         try {
+          // 1) 캐시가 있으면 즉시 표시 (서버 spawn 을 기다리지 않음 → 0초).
+          var cached = loadCache();
+          if (cached) renderStatus(cached, '(캐시 — 백그라운드 확인 중…)');
+
+          // 2) 백그라운드로 서버 확인. 도우미 서버 cold-start 가 느릴 수 있어 여러 번 재시도.
+          //    한 번 살아나면 이후엔 즉시 응답. 확인되면 갱신·캐시 저장, 실패해도 캐시 표시 유지.
+          var attempts = 5;
           for (var i = 1; i <= attempts; i++) {
-            setStatus('wait', i === 1 ? '세션 상태 확인 중…' : ('세션 서버 준비 중… (재시도 ' + i + '/' + attempts + ')'));
+            if (!cached) setStatus('wait', i === 1 ? '세션 상태 확인 중…' : ('세션 서버 준비 중… (재시도 ' + i + '/' + attempts + ')'));
             try {
               var s = await reqT('/status', undefined, 15000);
-              if (s && s.exists) {
-                setStatus('ok', '세션 저장됨 ✓  지역: ' + (s.country || '?') + (s.userId ? ',  userId: ' + s.userId : '') + (s.loggedInAt ? ',  로그인: ' + s.loggedInAt : ''));
-                $('clearRow').classList.remove('km81-hidden');
-              } else {
-                setStatus('none', '저장된 세션이 없습니다. 아래에서 로그인하세요.');
-                $('clearRow').classList.add('km81-hidden');
-              }
+              renderStatus(s, null);
+              saveCache({ exists: !!(s && s.exists), country: s && s.country, userId: s && s.userId, loggedInAt: s && s.loggedInAt });
               return; // 성공 → 종료
             } catch (e) {
               if (i < attempts) { await sleep(1500); continue; }
-              setStatus('none', '클라우드 UI 서버가 응답하지 않습니다(' + (e.message || e) + '). "다시 시도"를 누르거나, 컨테이너 재시작 후 다시 열어보세요. 아래 장치 설정은 정상 사용 가능합니다.');
+              if (cached) renderStatus(cached, '(캐시 기준 — 서버 확인 보류)');
+              else setStatus('none', '클라우드 UI 서버가 응답하지 않습니다(' + (e.message || e) + '). "다시 시도"를 누르거나, 컨테이너 재시작 후 다시 열어보세요. 아래 장치 설정은 정상 사용 가능합니다.');
             }
           }
         } finally { _statusRunning = false; }
@@ -157,7 +171,7 @@
 
         $('clearBtn').addEventListener('click', async function () {
           hb.showSpinner();
-          try { await reqT('/clear', undefined, 10000); hb.toast.success('세션을 삭제했습니다.'); }
+          try { await reqT('/clear', undefined, 10000); saveCache({ exists: false }); hb.toast.success('세션을 삭제했습니다.'); }
           catch (e) { hb.toast.error(e.message || '삭제 실패'); }
           hb.hideSpinner(); refreshStatus();
         });
