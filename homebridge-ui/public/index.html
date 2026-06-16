@@ -28,19 +28,6 @@
     <!-- 1단계: 로그인 -->
     <div id="loginStep">
       <div class="km81-row">
-        <label>지역 서버</label>
-        <select id="country" class="form-control">
-          <option value="tw">대만 (tw)</option>
-          <option value="cn">중국 (cn)</option>
-          <option value="sg">싱가포르 (sg)</option>
-          <option value="de">독일 (de)</option>
-          <option value="us">미국 (us)</option>
-          <option value="ru">러시아 (ru)</option>
-          <option value="in">인도 (in)</option>
-          <option value="i2">i2</option>
-        </select>
-        <small class="km81-muted">기기가 등록된 지역으로 고르세요 (토큰 추출 화면의 지역 열과 동일).</small>
-      </div>
       <div class="km81-row">
         <label>Mi 계정 (이메일/아이디)</label>
         <input id="username" type="text" class="form-control" autocomplete="username">
@@ -50,6 +37,7 @@
         <input id="password" type="password" class="form-control" autocomplete="current-password">
       </div>
       <button id="loginBtn" class="btn btn-primary">로그인 / 세션 만들기</button>
+      <small class="km81-muted" style="display:block; margin-top:6px;">로그인은 지역과 무관합니다(Mi 계정은 전역). 기기별 지역은 아래 "기기 검출"에서 확인해 각 기기의 <code>miCloudCountry</code> 에 지정하세요.</small>
     </div>
 
     <!-- 2단계: 2FA 인증코드 -->
@@ -88,12 +76,13 @@
     (async () => {
       const $ = (id) => document.getElementById(id);
 
-      // 기존 설정에서 기본 지역 채우기
+      // 기존 설정의 기본 지역(있으면)을 캐시 저장 시 기본값으로 쓴다. 로그인 자체와는 무관.
+      let defaultCountry = null;
       try {
         const cfgs = await homebridge.getPluginConfig();
         const pf = (cfgs || []).find(c => c && c.micloud);
         const c = pf && pf.micloud && pf.micloud.country;
-        if (c) $('country').value = String(c).toLowerCase();
+        if (c) defaultCountry = String(c).toLowerCase();
       } catch (e) { /* ignore */ }
 
       function showLogin() {
@@ -134,11 +123,10 @@
       $('loginBtn').addEventListener('click', async () => {
         const username = $('username').value.trim();
         const password = $('password').value;
-        const country = $('country').value;
         if (!username || !password) { homebridge.toast.error('아이디와 비밀번호를 입력하세요.'); return; }
         homebridge.showSpinner();
         let res;
-        try { res = await homebridge.request('/login', { username, password, country }); }
+        try { res = await homebridge.request('/login', { username, password, country: defaultCountry }); }
         catch (e) { homebridge.hideSpinner(); homebridge.toast.error(e.message || '요청 실패'); return; }
         homebridge.hideSpinner();
         if (!res || !res.ok) { homebridge.toast.error((res && res.message) || '로그인 실패'); return; }

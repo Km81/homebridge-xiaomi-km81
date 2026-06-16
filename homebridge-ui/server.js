@@ -62,12 +62,12 @@ class UiServer extends HomebridgePluginUiServer {
     const { username, password, country } = payload || {};
     if (!username || !password) return { ok: false, message: 'Mi 계정 아이디와 비밀번호를 입력하세요.' };
 
+    // 로그인은 지역과 무관(Mi 계정은 전역). country 는 캐시에 저장할 기본 지역값일 뿐이며,
+    // 실제 기기 제어 지역은 기기별 miCloudCountry 로 지정한다. 그래서 미지정/미지원이어도
+    // 로그인을 막지 않고 기본값으로 넘어간다.
     const miCloud = new MiCloud(this._quietLogger());
-    try {
-      miCloud.setCountry(String(country || 'cn').toLowerCase());
-    } catch (e) {
-      return { ok: false, message: `지원하지 않는 지역입니다: ${country}` };
-    }
+    try { miCloud.setCountry(String(country || 'cn').toLowerCase()); }
+    catch (e) { miCloud.setCountry('cn'); }
 
     try {
       await miCloud.login(username, password);
