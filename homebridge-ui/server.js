@@ -70,7 +70,7 @@ class UiServer extends HomebridgePluginUiServer {
       if (fs.existsSync(p)) {
         const j = JSON.parse(fs.readFileSync(p, 'utf8'));
         const s = j.session || {};
-        return { exists: true, country: j.country || null, userId: s.userId || null, loggedInAt: s.loggedInAt || null, path: p };
+        return { exists: true, country: j.country || null, userId: s.userId || null, loggedInAt: s.loggedInAt || null, timestamp: s.timestamp || null, path: p };
       }
     } catch (e) { /* 손상된 파일이면 없는 것으로 처리 */ }
     return { exists: false, path: p };

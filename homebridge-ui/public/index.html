@@ -3,44 +3,66 @@
 <head>
   <meta charset="utf-8">
   <style>
-    .km81-card { border: 1px solid #d9dde2; border-radius: 8px; padding: 16px; margin-bottom: 18px; }
-    .km81-card h4 { margin-top: 0; }
-    .km81-muted { color: #6c757d; font-size: 0.85rem; }
-    .km81-status { padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; font-size: 0.9rem; }
-    .km81-status.ok { background: #e6f4ea; color: #1e7e34; }
-    .km81-status.none { background: #fdecea; color: #b02a37; }
-    .km81-status.wait { background: #fff6e5; color: #946200; }
+    .km81-card { border: 1px solid #d9dde2; border-radius: 10px; padding: 16px 18px; margin-bottom: 18px; }
+    .km81-card h4 { margin: 0 0 4px 0; font-weight: 600; }
+    .km81-sub { color: #6c757d; font-size: 0.82rem; margin: 0 0 14px 0; line-height: 1.5; }
+    .km81-muted { color: #6c757d; font-size: 0.82rem; }
+    .km81-status { padding: 10px 12px; border-radius: 8px; margin-bottom: 10px; font-size: 0.9rem; line-height: 1.45; }
+    .km81-status.ok   { background: #e6f4ea; color: #1e7e34; border: 1px solid #bfe3c9; }
+    .km81-status.none { background: #fdecea; color: #b02a37; border: 1px solid #f3c4c0; }
+    .km81-status.wait { background: #fff6e5; color: #946200; border: 1px solid #f0dcb0; }
     .km81-row { margin-bottom: 10px; }
-    .km81-url { word-break: break-all; background:#f4f5f7; padding:8px; border-radius:6px; font-size:0.82rem; }
-    .km81-hidden { display: none; }
+    .km81-row label { font-size: 0.85rem; font-weight: 500; margin-bottom: 3px; display: block; }
+    .km81-actions { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-bottom: 6px; }
+    .km81-actions .btn { padding: 0; }
+    .km81-url { word-break: break-all; background: #f4f5f7; padding: 8px; border-radius: 6px; font-size: 0.82rem; display: block; }
+    .km81-hidden { display: none !important; }
+    .km81-pw-wrap { position: relative; }
+    .km81-pw-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 0.78rem; color: #6c757d; background: none; border: none; }
+    table.km81-dev { width: 100%; font-size: 0.82rem; border-collapse: collapse; }
+    table.km81-dev th, table.km81-dev td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
+    table.km81-dev th { color: #6c757d; font-weight: 600; }
+    table.km81-dev code { font-size: 0.78rem; }
+    .km81-chip { display: inline-block; background: #eef0f3; border-radius: 4px; padding: 1px 6px; font-size: 0.78rem; }
   </style>
 </head>
 <body>
+  <!-- ========== 카드 1: MiCloud 세션 ========== -->
   <div class="km81-card">
-    <h4>MiCloud 클라우드 세션 (2단계 인증)</h4>
-    <p class="km81-muted">
-      신형 기기(예: 타워팬 p45)를 클라우드/하이브리드로 제어하려면 MiCloud 세션이 필요합니다.
-      2단계 인증(2FA) 계정도 여기서 한 번 로그인하면 세션이 자동 저장되고, 이후엔 재입력이 필요 없습니다.
-      비밀번호는 저장되지 않고 세션 토큰만 보관됩니다.
+    <h4>☁️ MiCloud 클라우드 세션</h4>
+    <p class="km81-sub">
+      타워팬 같은 신형 기기를 <b>클라우드/하이브리드</b>로 제어할 때 필요합니다. 한 번 로그인하면 세션이 저장되고
+      이후엔 자동 인증돼요(2단계 인증 계정도 가능). 비밀번호는 저장되지 않고 토큰만 보관됩니다.
     </p>
 
-    <div id="statusBox" class="km81-status wait">세션 상태 확인 중…</div>
-    <div style="margin:-6px 0 12px 0;"><button id="retryStatusBtn" class="btn btn-link btn-sm" style="padding:0;">다시 시도</button></div>
+    <div id="statusBox" class="km81-status wait">서버 준비 중…</div>
 
-    <div id="loginStep">
+    <div class="km81-actions">
+      <button id="refreshBtn" class="btn btn-link btn-sm">상태 새로고침</button>
+      <button id="showLoginBtn" class="btn btn-link btn-sm km81-hidden">다른 계정으로 로그인</button>
+      <button id="clearBtn" class="btn btn-link btn-sm km81-hidden" style="color:#b02a37;">세션 삭제</button>
+      <span id="serverHint" class="km81-muted km81-hidden">· 서버 준비되면 버튼이 활성화됩니다</span>
+    </div>
+
+    <!-- 로그인 폼: 세션 있으면 숨김, 없거나 '다른 계정으로 로그인' 누르면 표시 -->
+    <div id="loginStep" class="km81-hidden" style="margin-top:8px;">
       <div class="km81-row">
         <label>Mi 계정 (이메일/아이디)</label>
         <input id="username" type="text" class="form-control" autocomplete="username">
       </div>
       <div class="km81-row">
         <label>Mi 비밀번호</label>
-        <input id="password" type="password" class="form-control" autocomplete="current-password">
+        <div class="km81-pw-wrap">
+          <input id="password" type="password" class="form-control" autocomplete="current-password">
+          <button type="button" id="pwToggle" class="km81-pw-toggle">표시</button>
+        </div>
       </div>
-      <button id="loginBtn" class="btn btn-primary">로그인 / 세션 만들기</button>
+      <button id="loginBtn" class="btn btn-primary" disabled>로그인 / 세션 만들기</button>
       <small class="km81-muted" style="display:block; margin-top:6px;">로그인은 지역과 무관합니다(Mi 계정은 전역). 기기별 지역은 아래 "기기 검출"에서 확인해 각 기기의 <code>miCloudCountry</code> 에 지정하세요.</small>
     </div>
 
-    <div id="ticketStep" class="km81-hidden">
+    <!-- 2단계 인증 -->
+    <div id="ticketStep" class="km81-hidden" style="margin-top:8px;">
       <div class="km81-status none">2단계 인증이 필요합니다. 아래 URL을 새 탭에서 열어 SMS/이메일로 인증코드를 받으세요.</div>
       <div class="km81-row"><a id="twoFaUrl" href="#" target="_blank" rel="noopener" class="km81-url"></a></div>
       <div class="km81-row">
@@ -51,19 +73,20 @@
       <button id="cancelBtn" class="btn btn-secondary">취소</button>
     </div>
 
-    <div id="clearRow" class="km81-row km81-hidden" style="margin-top:12px;">
-      <button id="clearBtn" class="btn btn-danger btn-sm">저장된 세션 삭제</button>
-      <button id="reloginBtn" class="btn btn-link btn-sm">다시 로그인</button>
-    </div>
+    <p class="km81-muted" style="margin:12px 0 0 0;">세션은 보통 수 주~수 개월 유효합니다. 만료되면(클라우드 폴링이 실패하면) "다른 계정으로 로그인"으로 다시 만들면 됩니다.</p>
   </div>
 
+  <!-- ========== 카드 2: 등록 기기 검출 ========== -->
   <div class="km81-card">
-    <h4>등록된 기기 검출 (IP · 토큰 · 서버)</h4>
-    <p class="km81-muted">
-      로그인 후, 계정에 등록된 기기들의 <b>IP · 토큰 · 모델 · Device ID</b> 와 각 기기가 등록된 <b>지역(서버)</b>을 찾아줍니다.
-      여러 지역을 조회하므로 수십 초 걸릴 수 있어요. <b>자동 등록은 하지 않습니다</b> — 값을 복사해 아래 장치 설정에 직접 넣으세요.
+    <h4>🔍 등록 기기 검출 (IP · 토큰 · 서버)</h4>
+    <p class="km81-sub">
+      계정에 등록된 기기들의 <b>IP · 토큰 · 모델 · Device ID</b> 와 각 기기가 등록된 <b>지역(서버)</b>을 찾아줍니다.
+      여러 지역을 조회하므로 <b>수십 초</b> 걸릴 수 있어요. 자동 등록은 하지 않으며, 값을 복사해 아래 장치 설정에 직접 넣으세요.
     </p>
-    <button id="scanBtn" class="btn btn-primary">기기 불러오기 / 서버 검출</button>
+    <div class="km81-actions">
+      <button id="scanBtn" class="btn btn-primary" disabled>기기 불러오기 / 서버 검출</button>
+      <span id="scanHint" class="km81-muted">서버 준비 후 사용 가능</span>
+    </div>
     <div id="scanErrors" class="km81-muted" style="margin-top:8px;"></div>
     <div id="devTableWrap" style="margin-top:12px; overflow-x:auto;"></div>
   </div>
@@ -73,8 +96,9 @@
       var hb = window.homebridge;
       function $(id) { return document.getElementById(id); }
       function setStatus(cls, text) { var b = $('statusBox'); if (b) { b.className = 'km81-status ' + cls; b.textContent = text; } }
+      function show(id) { var e = $(id); if (e) e.classList.remove('km81-hidden'); }
+      function hide(id) { var e = $(id); if (e) e.classList.add('km81-hidden'); }
 
-      // homebridge.request 가 (UI 서버 크래시/미설치 등으로) 영영 안 돌아오는 것 방지: 타임아웃 래퍼.
       function reqT(path, body, ms) {
         return Promise.race([
           hb.request(path, body),
@@ -83,75 +107,101 @@
       }
       function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
-      // 세션 상태를 브라우저에 캐시해, 설정 화면을 열 때 서버(도우미 프로세스) spawn 을
-      // 기다리지 않고 즉시 표시한다. 서버 확인은 백그라운드로 갱신.
       function loadCache() { try { return JSON.parse(localStorage.getItem('km81_sess') || 'null'); } catch (e) { return null; } }
       function saveCache(o) { try { localStorage.setItem('km81_sess', JSON.stringify(o)); } catch (e) { } }
-      function renderStatus(s, note) {
+
+      function fmtTime(s) {
+        if (s && s.timestamp) { try { return new Date(s.timestamp).toLocaleString(); } catch (e) { } }
+        return (s && s.loggedInAt) ? (s.loggedInAt + ' UTC') : '';
+      }
+
+      var serverReady = false;
+
+      // 서버 응답을 확인하기 전까지 서버가 필요한 버튼은 비활성화 → cold-start 중 클릭해서
+      // '멈춘 듯' 보이는 문제 방지. 서버가 살아나면(=/status 응답) 활성화.
+      function setServerReady(ready) {
+        serverReady = ready;
+        $('loginBtn').disabled = !ready;
+        $('scanBtn').disabled = !ready;
+        if (ready) { hide('serverHint'); $('scanHint').textContent = ''; }
+        else { $('scanHint').textContent = '서버 준비 후 사용 가능'; }
+      }
+
+      // 세션 상태에 따라 화면 구성
+      function applySession(s, note) {
         if (s && s.exists) {
-          setStatus('ok', '세션 저장됨 ✓  지역: ' + (s.country || '?') + (s.userId ? (',  userId: ' + s.userId) : '') + (s.loggedInAt ? (',  로그인: ' + s.loggedInAt) : '') + (note ? ('  ' + note) : ''));
-          $('clearRow').classList.remove('km81-hidden');
+          var t = fmtTime(s);
+          setStatus('ok', '세션 저장됨 ✓   지역: ' + (s.country || '?') + (s.userId ? '   ·  userId: ' + s.userId : '') + (t ? '   ·  로그인: ' + t : '') + (note ? '   ' + note : ''));
+          show('showLoginBtn'); show('clearBtn');
+          hide('loginStep');           // 세션 있으면 로그인 폼 숨김
         } else {
-          setStatus('none', '저장된 세션이 없습니다. 아래에서 로그인하세요.' + (note ? ('  ' + note) : ''));
-          $('clearRow').classList.add('km81-hidden');
+          setStatus('none', '저장된 세션이 없습니다. 아래에서 로그인하세요.' + (note ? '   ' + note : ''));
+          hide('showLoginBtn'); hide('clearBtn');
+          show('loginStep');           // 세션 없으면 폼 표시
         }
       }
 
-      var defaultCountry = null;
-      var schemaShown = false;
-      var wired = false;
-
-      // 장치 설정(스키마) 폼은 클라우드 UI 서버와 무관 — 준비되는 즉시 한 번만 띄운다(재시도 안전).
-      function tryShowForm() {
-        if (schemaShown) return;
-        try { hb.showSchemaForm(); schemaShown = true; } catch (e) { /* 아직 준비 전 — 폴백 타이머가 재시도 */ }
-      }
-
-      function showLogin() { $('loginStep').classList.remove('km81-hidden'); $('ticketStep').classList.add('km81-hidden'); }
-      function showTicket(url) { $('twoFaUrl').textContent = url; $('twoFaUrl').href = url; $('loginStep').classList.add('km81-hidden'); $('ticketStep').classList.remove('km81-hidden'); }
+      function showLogin() { hide('ticketStep'); show('loginStep'); }
+      function showTicket(url) { $('twoFaUrl').textContent = url; $('twoFaUrl').href = url; hide('loginStep'); show('ticketStep'); }
 
       var _statusRunning = false;
       async function refreshStatus() {
         if (_statusRunning) return;
         _statusRunning = true;
         try {
-          // 1) 캐시가 있으면 즉시 표시 (서버 spawn 을 기다리지 않음 → 0초).
+          // 1) 캐시 즉시 표시(서버 spawn 대기 없이 0초). 단 버튼은 서버 확인 전까지 비활성.
           var cached = loadCache();
-          if (cached) renderStatus(cached, '(캐시 — 백그라운드 확인 중…)');
+          if (cached) applySession(cached, '(캐시 — 서버 확인 중…)');
+          else setStatus('wait', '서버 준비 중…');
+          show('serverHint');
 
-          // 2) 백그라운드로 서버 확인. 도우미 서버 cold-start 가 느릴 수 있어 여러 번 재시도.
-          //    한 번 살아나면 이후엔 즉시 응답. 확인되면 갱신·캐시 저장, 실패해도 캐시 표시 유지.
-          var attempts = 5;
+          // 2) 서버 확인. cold-start 가 느릴 수 있어 짧은 타임아웃으로 여러 번 시도 →
+          //    살아나는 즉시 잡아 버튼 활성화. 실패 시 캐시 유지(멈춤/경고 없음).
+          var attempts = 8;
           for (var i = 1; i <= attempts; i++) {
-            if (!cached) setStatus('wait', i === 1 ? '세션 상태 확인 중…' : ('세션 서버 준비 중… (재시도 ' + i + '/' + attempts + ')'));
             try {
-              var s = await reqT('/status', undefined, 15000);
-              renderStatus(s, null);
-              saveCache({ exists: !!(s && s.exists), country: s && s.country, userId: s && s.userId, loggedInAt: s && s.loggedInAt });
-              return; // 성공 → 종료
+              var s = await reqT('/status', undefined, 8000);
+              setServerReady(true);
+              applySession(s, null);
+              saveCache({ exists: !!(s && s.exists), country: s && s.country, userId: s && s.userId, loggedInAt: s && s.loggedInAt, timestamp: s && s.timestamp });
+              return;
             } catch (e) {
-              if (i < attempts) { await sleep(1500); continue; }
-              if (cached) renderStatus(cached, '(캐시 기준 — 서버 확인 보류)');
-              else setStatus('none', '클라우드 UI 서버가 응답하지 않습니다(' + (e.message || e) + '). "다시 시도"를 누르거나, 컨테이너 재시작 후 다시 열어보세요. 아래 장치 설정은 정상 사용 가능합니다.');
+              if (i < attempts) { await sleep(1000); continue; }
+              setServerReady(false);
+              if (cached) applySession(cached, '(캐시 기준 · 서버 확인 보류 — "상태 새로고침")');
+              else setStatus('none', '클라우드 UI 서버가 응답하지 않습니다. "상태 새로고침"을 누르거나 컨테이너 재시작 후 다시 열어보세요. (아래 장치 설정은 정상 사용 가능)');
             }
           }
         } finally { _statusRunning = false; }
       }
 
-      function onSaved() { showLogin(); hb.toast.success('MiCloud 세션을 저장했습니다. Homebridge를 재시작하면 적용됩니다.', '완료'); refreshStatus(); }
+      function onSaved(s) {
+        hide('ticketStep'); hide('loginStep');
+        $('username').value = ''; $('password').value = '';
+        hb.toast.success('MiCloud 세션을 저장했습니다. Homebridge를 재시작하면 적용됩니다.', '완료');
+        if (s) { applySession({ exists: true, country: s.country, userId: s.userId, timestamp: s.timestamp }, null); saveCache({ exists: true, country: s.country, userId: s.userId, timestamp: s.timestamp }); }
+        refreshStatus();
+      }
 
-      function wireHandlers() {
-        if (wired) return; wired = true;
+      function wire() {
+        $('refreshBtn').addEventListener('click', refreshStatus);
+        $('showLoginBtn').addEventListener('click', function () { showLogin(); $('username').focus(); });
+
+        $('pwToggle').addEventListener('click', function () {
+          var p = $('password');
+          if (p.type === 'password') { p.type = 'text'; this.textContent = '숨김'; } else { p.type = 'password'; this.textContent = '표시'; }
+        });
 
         $('loginBtn').addEventListener('click', async function () {
+          if (!serverReady) { hb.toast.error('서버가 아직 준비되지 않았어요. 잠시 후 다시 시도하세요.'); return; }
           var username = $('username').value.trim(); var password = $('password').value;
           if (!username || !password) { hb.toast.error('아이디와 비밀번호를 입력하세요.'); return; }
           hb.showSpinner(); var res;
-          try { res = await reqT('/login', { username: username, password: password, country: defaultCountry }, 30000); }
+          try { res = await reqT('/login', { username: username, password: password, country: (loadCache() || {}).country }, 30000); }
           catch (e) { hb.hideSpinner(); hb.toast.error(e.message || '요청 실패'); return; }
           hb.hideSpinner();
           if (!res || !res.ok) { hb.toast.error((res && res.message) || '로그인 실패'); return; }
-          if (res.status === '2fa') { showTicket(res.notificationUrl); hb.toast.info('2단계 인증이 필요합니다.'); } else { onSaved(); }
+          if (res.status === '2fa') { showTicket(res.notificationUrl); hb.toast.info('2단계 인증이 필요합니다.'); } else { onSaved(res); }
         });
 
         $('ticketBtn').addEventListener('click', async function () {
@@ -162,14 +212,13 @@
           catch (e) { hb.hideSpinner(); hb.toast.error(e.message || '요청 실패'); return; }
           hb.hideSpinner();
           if (!res || !res.ok) { hb.toast.error((res && res.message) || '인증 실패'); return; }
-          $('ticket').value = ''; onSaved();
+          $('ticket').value = ''; onSaved(res);
         });
 
         $('cancelBtn').addEventListener('click', showLogin);
-        $('reloginBtn').addEventListener('click', showLogin);
-        $('retryStatusBtn').addEventListener('click', refreshStatus);
 
         $('clearBtn').addEventListener('click', async function () {
+          if (!serverReady) { hb.toast.error('서버가 준비되지 않았어요.'); return; }
           hb.showSpinner();
           try { await reqT('/clear', undefined, 10000); saveCache({ exists: false }); hb.toast.success('세션을 삭제했습니다.'); }
           catch (e) { hb.toast.error(e.message || '삭제 실패'); }
@@ -179,22 +228,24 @@
         function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
         function renderDevices(devices) {
           if (!devices || !devices.length) { $('devTableWrap').innerHTML = '<div class="km81-muted">기기를 찾지 못했습니다.</div>'; return; }
-          var h = '<table class="table table-sm"><thead><tr><th>이름</th><th>모델</th><th>Device ID</th><th>IP</th><th>토큰</th><th>서버</th></tr></thead><tbody>';
+          var h = '<table class="km81-dev"><thead><tr><th>이름</th><th>모델</th><th>Device ID</th><th>IP</th><th>토큰</th><th>서버</th></tr></thead><tbody>';
           for (var i = 0; i < devices.length; i++) {
             var d = devices[i];
             h += '<tr><td>' + esc(d.name) + (d.online ? '' : ' <span class="km81-muted">(오프라인)</span>') + '</td>'
               + '<td>' + esc(d.model) + '</td><td><code>' + esc(d.did) + '</code></td><td><code>' + esc(d.ip) + '</code></td>'
               + '<td><code>' + esc(d.token) + '</code> <button class="btn btn-link btn-sm km81-copy" data-v="' + esc(d.token) + '">복사</button></td>'
-              + '<td><b>' + esc(d.country) + '</b></td></tr>';
+              + '<td><span class="km81-chip">' + esc(d.country) + '</span></td></tr>';
           }
           h += '</tbody></table>'; $('devTableWrap').innerHTML = h;
         }
 
         $('scanBtn').addEventListener('click', async function () {
-          $('scanErrors').textContent = ''; hb.showSpinner(); var res;
+          if (!serverReady) { hb.toast.error('서버가 준비되지 않았어요. 잠시 후 다시.'); return; }
+          $('scanErrors').textContent = ''; $('scanHint').textContent = '여러 지역 조회 중… (수십 초)';
+          hb.showSpinner(); var res;
           try { res = await reqT('/devices', undefined, 90000); }
-          catch (e) { hb.hideSpinner(); hb.toast.error(e.message || '요청 실패'); return; }
-          hb.hideSpinner();
+          catch (e) { hb.hideSpinner(); $('scanHint').textContent = ''; hb.toast.error(e.message || '요청 실패'); return; }
+          hb.hideSpinner(); $('scanHint').textContent = '';
           if (!res || !res.ok) { hb.toast.error((res && res.message) || '기기 조회 실패'); return; }
           renderDevices(res.devices);
           if (res.errors && res.errors.length) $('scanErrors').textContent = '일부 지역 조회 실패: ' + res.errors.join(' · ');
@@ -204,26 +255,23 @@
         $('devTableWrap').addEventListener('click', function (ev) {
           var b = ev.target.closest && ev.target.closest('.km81-copy'); if (!b) return;
           var v = b.getAttribute('data-v') || '';
-          if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(v).then(function () { hb.toast.success('토큰을 복사했습니다.'); }).catch(function () { hb.toast.error('복사 실패'); }); }
+          if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(v).then(function () { hb.toast.success('토큰을 복사했습니다.'); }).catch(function () { hb.toast.info(v); }); }
           else { hb.toast.info(v); }
         });
       }
 
-      async function init() {
-        tryShowForm();          // 장치 설정 폼은 가능한 빨리(서버와 무관)
+      var schemaShown = false;
+      function tryShowForm() { if (schemaShown) return; try { hb.showSchemaForm(); schemaShown = true; } catch (e) { } }
+
+      function init() {
+        tryShowForm();
         if (init._done) return; init._done = true;
-        try {
-          var cfgs = await hb.getPluginConfig();
-          var pf = (cfgs || []).find(function (c) { return c && c.micloud; });
-          var c = pf && pf.micloud && pf.micloud.country; if (c) defaultCountry = String(c).toLowerCase();
-        } catch (e) { /* ignore */ }
-        try { wireHandlers(); } catch (e) { /* ignore */ }
-        refreshStatus();        // 세션 상태(클라우드 UI 서버) — 타임아웃 보호
+        try { wire(); } catch (e) { }
+        refreshStatus();
       }
 
-      // Config UI 프런트엔드 ready 후 init. 이미 지났을 수 있으니 폴백 타이머로 보강.
-      try { if (hb && typeof hb.addEventListener === 'function') hb.addEventListener('ready', init); } catch (e) {}
-      setTimeout(init, 400);
+      try { if (hb && typeof hb.addEventListener === 'function') hb.addEventListener('ready', init); } catch (e) { }
+      setTimeout(init, 300);
       setTimeout(tryShowForm, 1500);
       setTimeout(tryShowForm, 3500);
     })();
