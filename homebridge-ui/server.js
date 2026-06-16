@@ -1,20 +1,24 @@
-'use strict';
-
 /*
- * Homebridge Custom UI 서버.
+ * Homebridge Custom UI 서버 (ESM).
  *
  * 설정 화면에서 터미널 없이 MiCloud 에 로그인(2FA 포함)하고, 성공한 세션을
  * Homebridge storage 폴더의 'xiaomi-km81-micloud-session.json' 으로 저장한다.
  * 플러그인(index.js initMiCloud)은 그 캐시 파일을 자동으로 읽어 인증한다.
+ *
+ * @homebridge/plugin-ui-utils v2 는 ESM 전용이라, 현재 Config UI X/Node 와 맞물리도록
+ * 이 파일도 ESM 으로 작성한다(homebridge-ui/package.json 의 "type":"module"). 본체 플러그인
+ * (index.js/lib)은 CommonJS 그대로이며, MiCloud 는 createRequire 로 지연 로드한다.
  */
 
-const { HomebridgePluginUiServer } = require('@homebridge/plugin-ui-utils');
-const fs = require('fs');
-const path = require('path');
+import { HomebridgePluginUiServer } from '@homebridge/plugin-ui-utils';
+import fs from 'fs';
+import path from 'path';
+import { createRequire } from 'module';
 
-// MiCloud(및 의존성 node-fetch/randomstring)를 모듈 로드 시점에 require 하면, 그 로드가
-// 실패할 경우 UI 서버 프로세스 전체가 죽어 모든 요청이 무한 대기(스피너/“확인 중” 멈춤)한다.
-// 핸들러에서 지연 로드해 그 실패를 격리한다(/status 와 서버 ready 는 영향받지 않음).
+const require = createRequire(import.meta.url);
+
+// MiCloud(및 node-fetch/randomstring)는 핸들러에서 지연 로드해, 그 로드 실패가 서버 기동/ready
+// 를 막지 않도록 격리한다(/status 와 ready 는 MiCloud 없이도 동작).
 let _MiCloud = null;
 function getMiCloud() {
   if (!_MiCloud) _MiCloud = require('../lib/common/MiCloud.js');
