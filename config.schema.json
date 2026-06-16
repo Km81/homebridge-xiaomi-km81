@@ -14,7 +14,7 @@
       "micloud": {
         "title": "MiCloud (클라우드 제어)",
         "type": "object",
-        "description": "로컬(LAN)이 원천 차단된 환경에서 기기를 클라우드로 제어할 때 사용합니다(대부분의 기기는 로컬로 안정 동작하므로 불필요). Mi 계정 정보를 입력하고 해당 기기 설정에서 'MiCloud로 제어'를 켜세요. 2단계 인증(2FA) 계정은 'node tools/micloud-login.js'로 세션 캐시를 한 번 만들면 됩니다(README 참고).",
+        "description": "신형 기기를 클라우드/하이브리드로 제어할 때만 사용합니다(대부분은 로컬로 충분). 2단계 인증 계정은 설정 화면의 'MiCloud 로그인 캐시 등록' 패널에서 한 번 로그인하면 됩니다.",
         "properties": {
           "username": { "title": "Mi 계정 (이메일/아이디)", "type": "string" },
           "password": { "title": "Mi 비밀번호", "type": "string" },
@@ -201,7 +201,7 @@
       "title": "MiCloud 기기 등록",
       "expandable": true,
       "expanded": false,
-      "description": "로컬 연결이 불안정한 신형 기기(예: xiaomi.fan.p45)를 클라우드로 제어할 때만 입력하세요.",
+      "description": "비(非)2단계 인증 계정용 로그인 정보입니다. 2단계 인증 계정은 위 'MiCloud 로그인 캐시 등록' 패널에서 로그인하세요(여기는 비워도 됩니다).",
       "items": [ "micloud.username", "micloud.password", "micloud.country", "micloud.debug" ]
     },
     {
@@ -257,11 +257,11 @@
           "condition": { "functionBody": "return model.devices[arrayIndices[0]] && model.devices[arrayIndices[0]].deviceType==='fan';" } },
         { "key": "devices[].forceMiCloud",
           "title": "[선풍기] MiCloud(클라우드) 전용 제어",
-          "description": "로컬을 쓰지 않고 항상 클라우드로 제어합니다. 상단의 MiCloud 계정 정보와 model, Device ID 가 필요합니다.",
+          "description": "로컬을 쓰지 않고 항상 클라우드로 제어합니다. model · Device ID 와 MiCloud 세션이 필요합니다.",
           "condition": { "functionBody": "return model.devices[arrayIndices[0]] && model.devices[arrayIndices[0]].deviceType==='fan';" } },
         { "key": "devices[].cloudFallback",
           "title": "[선풍기] 하이브리드 (로컬 우선 + 실패 시 클라우드 자동 전환)",
-          "description": "평소엔 빠른 로컬로, 로컬이 연속 실패하면 그 기기만 자동으로 클라우드로 전환하고 복구되면 다시 로컬로 돌아옵니다. 로컬이 자주 끊기는 신형 기기(예: xiaomi.fan.p45)에 권장. 상단 MiCloud 계정 정보와 model, Device ID 가 필요합니다. (forceMiCloud 가 켜져 있으면 그쪽이 우선)",
+          "description": "평소엔 빠른 로컬, 로컬이 연속 실패하면 자동으로 클라우드로 전환했다가 복구되면 로컬로 복귀합니다. 로컬이 자주 끊기는 신형 기기(예: xiaomi.fan.p45)에 권장. model · Device ID · MiCloud 세션이 필요합니다. (forceMiCloud 가 우선)",
           "condition": { "functionBody": "var d=model.devices[arrayIndices[0]]; return d && d.deviceType==='fan' && d.forceMiCloud!==true;" } },
         { "key": "devices[].miCloudCountry", "type": "select",
           "title": "[선풍기] 이 기기의 MiCloud 지역 (선택)",

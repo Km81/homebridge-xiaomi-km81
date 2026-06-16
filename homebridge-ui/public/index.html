@@ -3,8 +3,17 @@
 <head>
   <meta charset="utf-8">
   <style>
-    .km81-card { border: 1px solid #d9dde2; border-radius: 10px; padding: 16px 18px; margin-bottom: 18px; }
-    .km81-card h4 { margin: 0 0 4px 0; font-weight: 600; }
+    .km81-card { border: 1px solid #d9dde2; border-radius: 10px; padding: 0; margin-bottom: 14px; overflow: hidden; }
+    .km81-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; cursor: pointer; user-select: none; }
+    .km81-head:hover { background: #f7f8fa; }
+    .km81-title { font-weight: 600; }
+    .km81-chev { display: inline-block; transition: transform .15s ease; color: #8a9099; font-size: 0.8rem; }
+    .km81-head.open .km81-chev { transform: rotate(90deg); }
+    .km81-summary { margin-left: auto; font-size: 0.82rem; color: #6c757d; font-weight: 400; }
+    .km81-summary.ok { color: #1e7e34; }
+    .km81-summary.none { color: #b02a37; }
+    .km81-body { padding: 0 16px 16px 16px; }
+    .km81-body.km81-collapsed { display: none; }
     .km81-sub { color: #6c757d; font-size: 0.82rem; margin: 0 0 14px 0; line-height: 1.5; }
     .km81-muted { color: #6c757d; font-size: 0.82rem; }
     .km81-status { padding: 10px 12px; border-radius: 8px; margin-bottom: 10px; font-size: 0.9rem; line-height: 1.45; }
@@ -28,68 +37,73 @@
   </style>
 </head>
 <body>
-  <!-- ========== 카드: MiCloud 로그인 캐시 ========== -->
+  <!-- ========== 패널 1: MiCloud 로그인 캐시 등록 (접기 가능) ========== -->
   <div class="km81-card">
-    <h4>MiCloud 로그인 캐시 등록</h4>
-    <p class="km81-sub">
-      타워팬 같은 신형 기기를 <b>클라우드/하이브리드</b>로 제어할 때 필요합니다. 한 번 로그인하면 세션이 저장되고
-      이후엔 자동 인증돼요(2단계 인증 계정도 가능). 비밀번호는 저장되지 않고 토큰만 보관됩니다.
-    </p>
+    <div class="km81-head" data-target="body1"><span class="km81-chev">▸</span><span class="km81-title">MiCloud 로그인 캐시 등록</span><span id="sessionSummary" class="km81-summary">확인 중…</span></div>
+    <div id="body1" class="km81-body km81-collapsed">
+      <p class="km81-sub">
+        신형 기기(타워팬 등)를 <b>클라우드/하이브리드</b>로 제어하려면 MiCloud 세션이 필요합니다.
+        한 번 로그인하면 <b>토큰만 저장</b>되어 이후 자동 인증됩니다. 2단계 인증(2FA) 계정도 지원하며,
+        비밀번호는 저장하지 않습니다.
+      </p>
 
-    <div id="statusBox" class="km81-status wait">서버 준비 중…</div>
+      <div id="statusBox" class="km81-status wait">서버 준비 중…</div>
 
-    <div class="km81-actions">
-      <button id="refreshBtn" class="btn btn-link btn-sm">새로고침</button>
-      <button id="showLoginBtn" class="btn btn-link btn-sm km81-hidden">계정 로그인</button>
-      <button id="clearBtn" class="btn btn-link btn-sm km81-hidden" style="color:#b02a37;">세션 삭제</button>
-      <span id="serverHint" class="km81-muted km81-hidden">· 서버 준비되면 버튼이 활성화됩니다</span>
-    </div>
-
-    <!-- 로그인 폼: 세션 있으면 숨김, 없거나 '계정 로그인' 누르면 표시 -->
-    <div id="loginStep" class="km81-hidden" style="margin-top:8px;">
-      <div class="km81-row">
-        <label>Mi 계정 (이메일/아이디)</label>
-        <input id="username" type="text" class="form-control" autocomplete="username">
+      <div class="km81-actions">
+        <button id="refreshBtn" class="btn btn-link btn-sm">새로고침</button>
+        <button id="showLoginBtn" class="btn btn-link btn-sm km81-hidden">계정 로그인</button>
+        <button id="clearBtn" class="btn btn-link btn-sm km81-hidden" style="color:#b02a37;">세션 삭제</button>
+        <span id="serverHint" class="km81-muted km81-hidden">· 서버 준비되면 버튼이 활성화됩니다</span>
       </div>
-      <div class="km81-row">
-        <label>Mi 비밀번호</label>
-        <div class="km81-pw-wrap">
-          <input id="password" type="password" class="form-control" autocomplete="current-password">
-          <button type="button" id="pwToggle" class="km81-pw-toggle">표시</button>
+
+      <!-- 로그인 폼: 세션 있으면 숨김, 없거나 '계정 로그인' 누르면 표시 -->
+      <div id="loginStep" class="km81-hidden" style="margin-top:8px;">
+        <div class="km81-row">
+          <label>Mi 계정 (이메일/아이디)</label>
+          <input id="username" type="text" class="form-control" autocomplete="username">
         </div>
+        <div class="km81-row">
+          <label>Mi 비밀번호</label>
+          <div class="km81-pw-wrap">
+            <input id="password" type="password" class="form-control" autocomplete="current-password">
+            <button type="button" id="pwToggle" class="km81-pw-toggle">표시</button>
+          </div>
+        </div>
+        <button id="loginBtn" class="btn btn-primary" disabled>로그인 / 세션 만들기</button>
+        <small class="km81-muted" style="display:block; margin-top:6px;">로그인은 지역과 무관합니다(Mi 계정은 전역). 기기별 등록 지역은 아래 <b>등록기기 검출</b>로 확인해 각 기기 설정의 <code>miCloudCountry</code> 에 넣으세요.</small>
       </div>
-      <button id="loginBtn" class="btn btn-primary" disabled>로그인 / 세션 만들기</button>
-      <small class="km81-muted" style="display:block; margin-top:6px;">로그인은 지역과 무관합니다(Mi 계정은 전역). 기기별 지역은 아래 "기기 검출"에서 확인해 각 기기의 <code>miCloudCountry</code> 에 지정하세요.</small>
-    </div>
 
-    <!-- 2단계 인증 -->
-    <div id="ticketStep" class="km81-hidden" style="margin-top:8px;">
-      <div class="km81-status none">2단계 인증이 필요합니다. 아래 URL을 새 탭에서 열어 SMS/이메일로 인증코드를 받으세요.</div>
-      <div class="km81-row"><a id="twoFaUrl" href="#" target="_blank" rel="noopener" class="km81-url"></a></div>
-      <div class="km81-row">
-        <label>받은 인증코드 (ticket)</label>
-        <input id="ticket" type="text" class="form-control" autocomplete="one-time-code">
+      <!-- 2단계 인증 -->
+      <div id="ticketStep" class="km81-hidden" style="margin-top:8px;">
+        <div class="km81-status none">2단계 인증이 필요합니다. 아래 URL을 새 탭에서 열어 SMS/이메일로 인증코드를 받으세요.</div>
+        <div class="km81-row"><a id="twoFaUrl" href="#" target="_blank" rel="noopener" class="km81-url"></a></div>
+        <div class="km81-row">
+          <label>받은 인증코드 (ticket)</label>
+          <input id="ticket" type="text" class="form-control" autocomplete="one-time-code">
+        </div>
+        <button id="ticketBtn" class="btn btn-primary">인증코드 제출</button>
+        <button id="cancelBtn" class="btn btn-secondary">취소</button>
       </div>
-      <button id="ticketBtn" class="btn btn-primary">인증코드 제출</button>
-      <button id="cancelBtn" class="btn btn-secondary">취소</button>
-    </div>
 
-    <p class="km81-muted" style="margin:12px 0 0 0;">세션은 보통 수 주~수 개월 유효합니다. 만료되면(클라우드 폴링이 실패하면) "계정 로그인"으로 다시 만들면 됩니다.</p>
+      <p class="km81-muted" style="margin:12px 0 0 0;">세션은 보통 수 주~수 개월 유효하며, 만료되면 <b>계정 로그인</b>으로 다시 만들면 됩니다.</p>
+    </div>
   </div>
 
-  <!-- ========== 카드 2: 등록 기기 검출 ========== -->
+  <!-- ========== 패널 2: MiCloud 등록기기 검출 (접기 가능) ========== -->
   <div class="km81-card">
-    <h4>MiCloud 등록기기 검출</h4>
-    <p class="km81-sub">
-      계정에 등록된 기기들의 <b>IP · 토큰 · 모델 · Device ID</b> 와 각 기기가 등록된 <b>지역(서버)</b>을 찾아줍니다.
-      여러 지역을 조회하므로 <b>수십 초</b> 걸릴 수 있어요. 자동 등록은 하지 않으며, 값을 복사해 아래 장치 설정에 직접 넣으세요.
-    </p>
-    <div class="km81-actions">
-      <button id="scanBtn" class="btn btn-primary" disabled>불러오기</button>
-      <span id="scanHint" class="km81-muted">설정 도우미 서버 준비 후 사용 가능</span>
+    <div class="km81-head" data-target="body2"><span class="km81-chev">▸</span><span class="km81-title">MiCloud 등록기기 검출</span><span id="scanSummary" class="km81-summary">IP · 토큰 · 서버 지역</span></div>
+    <div id="body2" class="km81-body km81-collapsed">
+      <p class="km81-sub">
+        계정의 모든 기기에서 <b>IP · 토큰 · 모델 · Device ID · 등록 지역(서버)</b>을 한 번에 찾아줍니다.
+        <b>자동 등록은 하지 않으니</b> 값을 복사해 아래 장치 설정에 직접 넣으세요. (여러 지역을 조회해 수십 초 소요)
+      </p>
+      <div class="km81-actions">
+        <button id="scanBtn" class="btn btn-primary" disabled>불러오기</button>
+        <span id="scanHint" class="km81-muted">설정 도우미 서버 준비 후 사용 가능</span>
+      </div>
+      <div id="scanErrors" class="km81-muted" style="margin-top:8px;"></div>
+      <div id="devTableWrap" style="margin-top:12px; overflow-x:auto;"></div>
     </div>
-    <div id="scanErrors" class="km81-muted" style="margin-top:8px;"></div>
-    <div id="devTableWrap" style="margin-top:12px; overflow-x:auto;"></div>
   </div>
 
   <script>
@@ -97,6 +111,7 @@
       var hb = window.homebridge;
       function $(id) { return document.getElementById(id); }
       function setStatus(cls, text) { var b = $('statusBox'); if (b) { b.className = 'km81-status ' + cls; b.textContent = text; } }
+      function setSummary(cls, text) { var e = $('sessionSummary'); if (e) { e.className = 'km81-summary' + (cls ? ' ' + cls : ''); e.textContent = text; } }
       function show(id) { var e = $(id); if (e) e.classList.remove('km81-hidden'); }
       function hide(id) { var e = $(id); if (e) e.classList.add('km81-hidden'); }
 
@@ -121,10 +136,23 @@
         return d.toLocaleString() + (tz ? ' (' + tz + ')' : '');
       }
 
+      // 접기/펼치기
+      function bindCollapse() {
+        var heads = document.querySelectorAll('.km81-head');
+        for (var i = 0; i < heads.length; i++) {
+          heads[i].addEventListener('click', function () {
+            var body = document.getElementById(this.getAttribute('data-target'));
+            if (!body) return;
+            var collapsed = body.classList.toggle('km81-collapsed');
+            this.classList.toggle('open', !collapsed);
+          });
+        }
+      }
+
       var serverReady = false;
 
-      // 서버 응답을 확인하기 전까지 서버가 필요한 버튼은 비활성화 → cold-start 중 클릭해서
-      // '멈춘 듯' 보이는 문제 방지. 서버가 살아나면(=/status 응답) 활성화.
+      // 서버 응답 확인 전까지 서버가 필요한 버튼은 비활성화 → cold-start 중 클릭해서 '멈춘 듯'
+      // 보이는 문제 방지. 서버가 살아나면(=/status 응답) 활성화.
       function setServerReady(ready) {
         serverReady = ready;
         $('loginBtn').disabled = !ready;
@@ -133,17 +161,19 @@
         else { $('scanHint').textContent = '설정 도우미 서버 준비 후 사용 가능'; }
       }
 
-      // 세션 상태에 따라 화면 구성
+      // 세션 상태에 따라 본문 + 헤더 요약 구성
       function applySession(s, note) {
         if (s && s.exists) {
           var t = fmtTime(s);
           setStatus('ok', '세션 저장됨 ✓   지역: ' + (s.country || '?') + (s.userId ? '   ·  userId: ' + s.userId : '') + (t ? '   ·  로그인: ' + t : '') + (note ? '   ' + note : ''));
+          setSummary('ok', '✓ ' + (s.country || '저장됨') + (note ? ' (확인 중)' : ''));
           show('showLoginBtn'); show('clearBtn');
-          hide('loginStep');           // 세션 있으면 로그인 폼 숨김
+          hide('loginStep');
         } else {
           setStatus('none', '저장된 세션이 없습니다. 아래에서 로그인하세요.' + (note ? '   ' + note : ''));
+          setSummary('none', '세션 없음 — 펼쳐서 로그인');
           hide('showLoginBtn'); hide('clearBtn');
-          show('loginStep');           // 세션 없으면 폼 표시
+          show('loginStep');
         }
       }
 
@@ -156,16 +186,12 @@
         _statusRunning = true;
         $('refreshBtn').disabled = true;
         try {
-          // 1) 캐시 즉시 표시(서버 spawn 대기 없이 0초). 단 버튼은 서버 확인 전까지 비활성.
           var cached = loadCache();
           if (cached) applySession(cached, '(캐시 — 서버 확인 중…)');
-          else setStatus('wait', '서버 준비 중…');
+          else { setStatus('wait', '서버 준비 중…'); setSummary('', '확인 중…'); }
           show('serverHint');
 
-          // 2) 서버 확인. cold-start 가 느릴 수 있어 짧은 타임아웃으로 여러 번 시도 →
-          //    살아나는 즉시 잡아 버튼 활성화. 실패 시 캐시 유지(멈춤/경고 없음).
           // NAS 부하 시 도우미 서버 spawn 이 아주 느릴 수 있어 넉넉히(약 3분) 재시도한다.
-          // 한 번 살아나면 즉시 잡아 버튼 활성화. 폴링 자체는 가벼워 본체 부하를 늘리지 않음.
           var attempts = 14;
           for (var i = 1; i <= attempts; i++) {
             $('serverHint').textContent = '· 설정 도우미 서버 깨우는 중… (' + i + '/' + attempts + ', NAS 부하 시 시간이 걸려요)';
@@ -178,8 +204,8 @@
             } catch (e) {
               if (i < attempts) { await sleep(i < 6 ? 1000 : 8000); continue; }
               setServerReady(false);
-              if (cached) applySession(cached, '(캐시 기준 · 서버 확인 보류 — "새로고침")');
-              else setStatus('none', '설정 도우미 서버가 응답하지 않습니다. "새로고침"을 누르거나 컨테이너 재시작 후 다시 열어보세요. (아래 장치 설정은 정상 사용 가능)');
+              if (cached) { applySession(cached, '(캐시 기준 · 서버 확인 보류 — "새로고침")'); }
+              else { setStatus('none', '설정 도우미 서버가 응답하지 않습니다. "새로고침"을 누르거나 컨테이너 재시작 후 다시 열어보세요. (아래 장치 설정은 정상 사용 가능)'); setSummary('none', '서버 응답 없음'); }
             }
           }
         } finally { _statusRunning = false; $('refreshBtn').disabled = false; }
@@ -194,6 +220,7 @@
       }
 
       function wire() {
+        bindCollapse();
         $('refreshBtn').addEventListener('click', refreshStatus);
         $('showLoginBtn').addEventListener('click', function () { showLogin(); $('username').focus(); });
 
@@ -258,6 +285,7 @@
           hb.hideSpinner(); $('scanHint').textContent = '';
           if (!res || !res.ok) { hb.toast.error((res && res.message) || '기기 조회 실패'); return; }
           renderDevices(res.devices);
+          $('scanSummary').textContent = (res.devices ? res.devices.length : 0) + '개 발견';
           if (res.errors && res.errors.length) $('scanErrors').textContent = '일부 지역 조회 실패: ' + res.errors.join(' · ');
           hb.toast.success((res.devices ? res.devices.length : 0) + '개 기기를 찾았습니다.');
         });
