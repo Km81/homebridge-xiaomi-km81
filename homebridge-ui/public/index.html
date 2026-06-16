@@ -9,6 +9,7 @@
     .km81-status { padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; font-size: 0.9rem; }
     .km81-status.ok { background: #e6f4ea; color: #1e7e34; }
     .km81-status.none { background: #fdecea; color: #b02a37; }
+    .km81-status.wait { background: #fff6e5; color: #946200; }
     .km81-row { margin-bottom: 10px; }
     .km81-url { word-break: break-all; background:#f4f5f7; padding:8px; border-radius:6px; font-size:0.82rem; }
     .km81-hidden { display: none; }
@@ -23,9 +24,8 @@
       비밀번호는 저장되지 않고 세션 토큰만 보관됩니다.
     </p>
 
-    <div id="statusBox" class="km81-status none">세션 상태 확인 중…</div>
+    <div id="statusBox" class="km81-status wait">세션 상태 확인 중…</div>
 
-    <!-- 1단계: 로그인 -->
     <div id="loginStep">
       <div class="km81-row">
         <label>Mi 계정 (이메일/아이디)</label>
@@ -39,12 +39,9 @@
       <small class="km81-muted" style="display:block; margin-top:6px;">로그인은 지역과 무관합니다(Mi 계정은 전역). 기기별 지역은 아래 "기기 검출"에서 확인해 각 기기의 <code>miCloudCountry</code> 에 지정하세요.</small>
     </div>
 
-    <!-- 2단계: 2FA 인증코드 -->
     <div id="ticketStep" class="km81-hidden">
       <div class="km81-status none">2단계 인증이 필요합니다. 아래 URL을 새 탭에서 열어 SMS/이메일로 인증코드를 받으세요.</div>
-      <div class="km81-row">
-        <a id="twoFaUrl" href="#" target="_blank" rel="noopener" class="km81-url"></a>
-      </div>
+      <div class="km81-row"><a id="twoFaUrl" href="#" target="_blank" rel="noopener" class="km81-url"></a></div>
       <div class="km81-row">
         <label>받은 인증코드 (ticket)</label>
         <input id="ticket" type="text" class="form-control" autocomplete="one-time-code">
@@ -53,7 +50,6 @@
       <button id="cancelBtn" class="btn btn-secondary">취소</button>
     </div>
 
-    <!-- 세션 있을 때: 삭제 -->
     <div id="clearRow" class="km81-row km81-hidden" style="margin-top:12px;">
       <button id="clearBtn" class="btn btn-danger btn-sm">저장된 세션 삭제</button>
       <button id="reloginBtn" class="btn btn-link btn-sm">다시 로그인</button>
@@ -72,144 +68,135 @@
   </div>
 
   <script>
-    (async () => {
-      const $ = (id) => document.getElementById(id);
+    (function () {
+      var hb = window.homebridge;
+      function $(id) { return document.getElementById(id); }
+      function setStatus(cls, text) { var b = $('statusBox'); if (b) { b.className = 'km81-status ' + cls; b.textContent = text; } }
 
-      // 커스텀 UI 서버가 죽거나 느려도 "장치 설정 폼"은 항상 뜨도록 스키마 폼을 먼저 표시한다.
-      try { homebridge.showSchemaForm(); } catch (e) { /* ignore */ }
-
-      // homebridge.request 가 (서버 크래시/미설치 등으로) 영영 안 돌아오는 것 방지: 타임아웃 래퍼.
+      // homebridge.request 가 (UI 서버 크래시/미설치 등으로) 영영 안 돌아오는 것 방지: 타임아웃 래퍼.
       function reqT(path, body, ms) {
         return Promise.race([
-          homebridge.request(path, body),
-          new Promise((_, rej) => setTimeout(() => rej(new Error('서버 응답 시간 초과(' + Math.round(ms / 1000) + 's)')), ms)),
+          hb.request(path, body),
+          new Promise(function (_, rej) { setTimeout(function () { rej(new Error('서버 응답 시간 초과(' + Math.round(ms / 1000) + 's)')); }, ms); }),
         ]);
       }
 
-      // 기존 설정의 기본 지역(있으면)을 캐시 저장 시 기본값으로 쓴다. 로그인 자체와는 무관.
-      let defaultCountry = null;
-      try {
-        const cfgs = await homebridge.getPluginConfig();
-        const pf = (cfgs || []).find(c => c && c.micloud);
-        const c = pf && pf.micloud && pf.micloud.country;
-        if (c) defaultCountry = String(c).toLowerCase();
-      } catch (e) { /* ignore */ }
+      var defaultCountry = null;
+      var schemaShown = false;
+      var wired = false;
 
-      function showLogin() {
-        $('loginStep').classList.remove('km81-hidden');
-        $('ticketStep').classList.add('km81-hidden');
+      // 장치 설정(스키마) 폼은 클라우드 UI 서버와 무관 — 준비되는 즉시 한 번만 띄운다(재시도 안전).
+      function tryShowForm() {
+        if (schemaShown) return;
+        try { hb.showSchemaForm(); schemaShown = true; } catch (e) { /* 아직 준비 전 — 폴백 타이머가 재시도 */ }
       }
-      function showTicket(url) {
-        $('twoFaUrl').textContent = url;
-        $('twoFaUrl').href = url;
-        $('loginStep').classList.add('km81-hidden');
-        $('ticketStep').classList.remove('km81-hidden');
-      }
+
+      function showLogin() { $('loginStep').classList.remove('km81-hidden'); $('ticketStep').classList.add('km81-hidden'); }
+      function showTicket(url) { $('twoFaUrl').textContent = url; $('twoFaUrl').href = url; $('loginStep').classList.add('km81-hidden'); $('ticketStep').classList.remove('km81-hidden'); }
 
       async function refreshStatus() {
+        setStatus('wait', '세션 상태 확인 중…');
         try {
-          const s = await reqT('/status', undefined, 12000);
+          var s = await reqT('/status', undefined, 12000);
           if (s && s.exists) {
-            $('statusBox').className = 'km81-status ok';
-            $('statusBox').textContent = `세션 저장됨 ✓  지역: ${s.country || '?'}` + (s.userId ? `,  userId: ${s.userId}` : '') + (s.loggedInAt ? `,  로그인: ${s.loggedInAt}` : '');
+            setStatus('ok', '세션 저장됨 ✓  지역: ' + (s.country || '?') + (s.userId ? ',  userId: ' + s.userId : '') + (s.loggedInAt ? ',  로그인: ' + s.loggedInAt : ''));
             $('clearRow').classList.remove('km81-hidden');
           } else {
-            $('statusBox').className = 'km81-status none';
-            $('statusBox').textContent = '저장된 세션이 없습니다. 아래에서 로그인하세요.';
+            setStatus('none', '저장된 세션이 없습니다. 아래에서 로그인하세요.');
             $('clearRow').classList.add('km81-hidden');
           }
         } catch (e) {
-          $('statusBox').className = 'km81-status none';
-          $('statusBox').textContent = '세션 상태 확인 실패: ' + (e.message || e) + ' — 플러그인 업데이트 후 Homebridge UI(또는 Homebridge) 재시작이 필요할 수 있어요. 아래 장치 설정은 정상 사용 가능합니다.';
+          setStatus('none', '클라우드 UI 서버가 응답하지 않습니다(' + (e.message || e) + '). 플러그인 재설치 또는 Homebridge UI 재시작이 필요할 수 있어요. 아래 장치 설정은 정상 사용 가능합니다.');
         }
       }
 
-      function onSaved(res) {
-        showLogin();
-        homebridge.toast.success('MiCloud 세션을 저장했습니다. Homebridge를 재시작하면 적용됩니다.', '완료');
-        refreshStatus();
-      }
+      function onSaved() { showLogin(); hb.toast.success('MiCloud 세션을 저장했습니다. Homebridge를 재시작하면 적용됩니다.', '완료'); refreshStatus(); }
 
-      $('loginBtn').addEventListener('click', async () => {
-        const username = $('username').value.trim();
-        const password = $('password').value;
-        if (!username || !password) { homebridge.toast.error('아이디와 비밀번호를 입력하세요.'); return; }
-        homebridge.showSpinner();
-        let res;
-        try { res = await reqT('/login', { username, password, country: defaultCountry }, 30000); }
-        catch (e) { homebridge.hideSpinner(); homebridge.toast.error(e.message || '요청 실패'); return; }
-        homebridge.hideSpinner();
-        if (!res || !res.ok) { homebridge.toast.error((res && res.message) || '로그인 실패'); return; }
-        if (res.status === '2fa') { showTicket(res.notificationUrl); homebridge.toast.info('2단계 인증이 필요합니다.'); }
-        else { onSaved(res); }
-      });
+      function wireHandlers() {
+        if (wired) return; wired = true;
 
-      $('ticketBtn').addEventListener('click', async () => {
-        const ticket = $('ticket').value.trim();
-        if (!ticket) { homebridge.toast.error('인증코드를 입력하세요.'); return; }
-        homebridge.showSpinner();
-        let res;
-        try { res = await reqT('/submitTicket', { ticket }, 30000); }
-        catch (e) { homebridge.hideSpinner(); homebridge.toast.error(e.message || '요청 실패'); return; }
-        homebridge.hideSpinner();
-        if (!res || !res.ok) { homebridge.toast.error((res && res.message) || '인증 실패'); return; }
-        $('ticket').value = '';
-        onSaved(res);
-      });
+        $('loginBtn').addEventListener('click', async function () {
+          var username = $('username').value.trim(); var password = $('password').value;
+          if (!username || !password) { hb.toast.error('아이디와 비밀번호를 입력하세요.'); return; }
+          hb.showSpinner(); var res;
+          try { res = await reqT('/login', { username: username, password: password, country: defaultCountry }, 30000); }
+          catch (e) { hb.hideSpinner(); hb.toast.error(e.message || '요청 실패'); return; }
+          hb.hideSpinner();
+          if (!res || !res.ok) { hb.toast.error((res && res.message) || '로그인 실패'); return; }
+          if (res.status === '2fa') { showTicket(res.notificationUrl); hb.toast.info('2단계 인증이 필요합니다.'); } else { onSaved(); }
+        });
 
-      $('cancelBtn').addEventListener('click', () => showLogin());
-      $('reloginBtn').addEventListener('click', () => showLogin());
+        $('ticketBtn').addEventListener('click', async function () {
+          var ticket = $('ticket').value.trim();
+          if (!ticket) { hb.toast.error('인증코드를 입력하세요.'); return; }
+          hb.showSpinner(); var res;
+          try { res = await reqT('/submitTicket', { ticket: ticket }, 30000); }
+          catch (e) { hb.hideSpinner(); hb.toast.error(e.message || '요청 실패'); return; }
+          hb.hideSpinner();
+          if (!res || !res.ok) { hb.toast.error((res && res.message) || '인증 실패'); return; }
+          $('ticket').value = ''; onSaved();
+        });
 
-      $('clearBtn').addEventListener('click', async () => {
-        homebridge.showSpinner();
-        try { await reqT('/clear', undefined, 10000); homebridge.toast.success('세션을 삭제했습니다.'); }
-        catch (e) { homebridge.toast.error(e.message || '삭제 실패'); }
-        homebridge.hideSpinner();
-        refreshStatus();
-      });
+        $('cancelBtn').addEventListener('click', showLogin);
+        $('reloginBtn').addEventListener('click', showLogin);
 
-      // ---- 기기/서버 검출 ----
-      function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-      function renderDevices(devices){
-        if (!devices || !devices.length) { $('devTableWrap').innerHTML = '<div class="km81-muted">기기를 찾지 못했습니다.</div>'; return; }
-        let h = '<table class="table table-sm"><thead><tr><th>이름</th><th>모델</th><th>Device ID</th><th>IP</th><th>토큰</th><th>서버</th></tr></thead><tbody>';
-        for (const d of devices) {
-          h += '<tr>'
-            + '<td>' + esc(d.name) + (d.online ? '' : ' <span class="km81-muted">(오프라인)</span>') + '</td>'
-            + '<td>' + esc(d.model) + '</td>'
-            + '<td><code>' + esc(d.did) + '</code></td>'
-            + '<td><code>' + esc(d.ip) + '</code></td>'
-            + '<td><code>' + esc(d.token) + '</code> <button class="btn btn-link btn-sm km81-copy" data-v="' + esc(d.token) + '">복사</button></td>'
-            + '<td><b>' + esc(d.country) + '</b></td>'
-            + '</tr>';
+        $('clearBtn').addEventListener('click', async function () {
+          hb.showSpinner();
+          try { await reqT('/clear', undefined, 10000); hb.toast.success('세션을 삭제했습니다.'); }
+          catch (e) { hb.toast.error(e.message || '삭제 실패'); }
+          hb.hideSpinner(); refreshStatus();
+        });
+
+        function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+        function renderDevices(devices) {
+          if (!devices || !devices.length) { $('devTableWrap').innerHTML = '<div class="km81-muted">기기를 찾지 못했습니다.</div>'; return; }
+          var h = '<table class="table table-sm"><thead><tr><th>이름</th><th>모델</th><th>Device ID</th><th>IP</th><th>토큰</th><th>서버</th></tr></thead><tbody>';
+          for (var i = 0; i < devices.length; i++) {
+            var d = devices[i];
+            h += '<tr><td>' + esc(d.name) + (d.online ? '' : ' <span class="km81-muted">(오프라인)</span>') + '</td>'
+              + '<td>' + esc(d.model) + '</td><td><code>' + esc(d.did) + '</code></td><td><code>' + esc(d.ip) + '</code></td>'
+              + '<td><code>' + esc(d.token) + '</code> <button class="btn btn-link btn-sm km81-copy" data-v="' + esc(d.token) + '">복사</button></td>'
+              + '<td><b>' + esc(d.country) + '</b></td></tr>';
+          }
+          h += '</tbody></table>'; $('devTableWrap').innerHTML = h;
         }
-        h += '</tbody></table>';
-        $('devTableWrap').innerHTML = h;
+
+        $('scanBtn').addEventListener('click', async function () {
+          $('scanErrors').textContent = ''; hb.showSpinner(); var res;
+          try { res = await reqT('/devices', undefined, 90000); }
+          catch (e) { hb.hideSpinner(); hb.toast.error(e.message || '요청 실패'); return; }
+          hb.hideSpinner();
+          if (!res || !res.ok) { hb.toast.error((res && res.message) || '기기 조회 실패'); return; }
+          renderDevices(res.devices);
+          if (res.errors && res.errors.length) $('scanErrors').textContent = '일부 지역 조회 실패: ' + res.errors.join(' · ');
+          hb.toast.success((res.devices ? res.devices.length : 0) + '개 기기를 찾았습니다.');
+        });
+
+        $('devTableWrap').addEventListener('click', function (ev) {
+          var b = ev.target.closest && ev.target.closest('.km81-copy'); if (!b) return;
+          var v = b.getAttribute('data-v') || '';
+          if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(v).then(function () { hb.toast.success('토큰을 복사했습니다.'); }).catch(function () { hb.toast.error('복사 실패'); }); }
+          else { hb.toast.info(v); }
+        });
       }
 
-      $('scanBtn').addEventListener('click', async () => {
-        $('scanErrors').textContent = '';
-        homebridge.showSpinner();
-        let res;
-        try { res = await reqT('/devices', undefined, 90000); }
-        catch (e) { homebridge.hideSpinner(); homebridge.toast.error(e.message || '요청 실패'); return; }
-        homebridge.hideSpinner();
-        if (!res || !res.ok) { homebridge.toast.error((res && res.message) || '기기 조회 실패'); return; }
-        renderDevices(res.devices);
-        if (res.errors && res.errors.length) $('scanErrors').textContent = '일부 지역 조회 실패: ' + res.errors.join(' · ');
-        homebridge.toast.success((res.devices ? res.devices.length : 0) + '개 기기를 찾았습니다.');
-      });
+      async function init() {
+        tryShowForm();          // 장치 설정 폼은 가능한 빨리(서버와 무관)
+        if (init._done) return; init._done = true;
+        try {
+          var cfgs = await hb.getPluginConfig();
+          var pf = (cfgs || []).find(function (c) { return c && c.micloud; });
+          var c = pf && pf.micloud && pf.micloud.country; if (c) defaultCountry = String(c).toLowerCase();
+        } catch (e) { /* ignore */ }
+        try { wireHandlers(); } catch (e) { /* ignore */ }
+        refreshStatus();        // 세션 상태(클라우드 UI 서버) — 타임아웃 보호
+      }
 
-      $('devTableWrap').addEventListener('click', (ev) => {
-        const b = ev.target.closest && ev.target.closest('.km81-copy');
-        if (!b) return;
-        const v = b.getAttribute('data-v') || '';
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(v).then(() => homebridge.toast.success('토큰을 복사했습니다.')).catch(() => homebridge.toast.error('복사 실패'));
-        } else { homebridge.toast.info(v); }
-      });
-
-      refreshStatus();   // 비동기, 내부 타임아웃 — 폼 표시를 막지 않음
+      // Config UI 프런트엔드 ready 후 init. 이미 지났을 수 있으니 폴백 타이머로 보강.
+      try { if (hb && typeof hb.addEventListener === 'function') hb.addEventListener('ready', init); } catch (e) {}
+      setTimeout(init, 400);
+      setTimeout(tryShowForm, 1500);
+      setTimeout(tryShowForm, 3500);
     })();
   </script>
 </body>

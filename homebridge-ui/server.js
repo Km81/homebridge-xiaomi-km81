@@ -8,7 +8,7 @@
  * 플러그인(index.js initMiCloud)은 그 캐시 파일을 자동으로 읽어 인증한다.
  */
 
-const { HomebridgePluginUiServer, RequestError } = require('@homebridge/plugin-ui-utils');
+const { HomebridgePluginUiServer } = require('@homebridge/plugin-ui-utils');
 const fs = require('fs');
 const path = require('path');
 
@@ -39,7 +39,14 @@ class UiServer extends HomebridgePluginUiServer {
   }
 
   _sessionPath() {
-    return path.join(this.homebridgeStoragePath, SESSION_FILENAME);
+    // 일부 Config UI X 환경/버전에서 this.homebridgeStoragePath 가 비어 있을 수 있다.
+    // 그대로 path.join 하면 throw 되고, 폴백으로 process.env(UIX_STORAGE_PATH 등)도 본다.
+    const base = this.homebridgeStoragePath
+      || process.env.UIX_STORAGE_PATH
+      || process.env.HOMEBRIDGE_STORAGE_PATH
+      || (process.env.HOME ? path.join(process.env.HOME, '.homebridge') : null);
+    if (!base || typeof base !== 'string') return null;
+    return path.join(base, SESSION_FILENAME);
   }
 
   _quietLogger() {
@@ -49,13 +56,16 @@ class UiServer extends HomebridgePluginUiServer {
   _saveSession(miCloud) {
     const session = miCloud.getServiceToken();
     if (!session) throw new Error('세션 토큰을 만들지 못했습니다.');
+    const p = this._sessionPath();
+    if (!p) throw new Error('세션을 저장할 storage 경로를 확인할 수 없습니다.');
     const data = { country: miCloud.country, session };
-    fs.writeFileSync(this._sessionPath(), JSON.stringify(data, null, 2) + '\n');
+    fs.writeFileSync(p, JSON.stringify(data, null, 2) + '\n');
     return data;
   }
 
   async handleStatus() {
     const p = this._sessionPath();
+    if (!p) return { exists: false, path: null, warn: 'storage 경로를 확인할 수 없습니다.' };
     try {
       if (fs.existsSync(p)) {
         const j = JSON.parse(fs.readFileSync(p, 'utf8'));
@@ -113,7 +123,7 @@ class UiServer extends HomebridgePluginUiServer {
   _loadSession() {
     try {
       const p = this._sessionPath();
-      if (fs.existsSync(p)) {
+      if (p && fs.existsSync(p)) {
         const j = JSON.parse(fs.readFileSync(p, 'utf8'));
         if (j && j.session) return j;
       }
@@ -170,9 +180,9 @@ class UiServer extends HomebridgePluginUiServer {
   async handleClear() {
     const p = this._sessionPath();
     try {
-      if (fs.existsSync(p)) fs.unlinkSync(p);
+      if (p && fs.existsSync(p)) fs.unlinkSync(p);
     } catch (e) {
-      throw new RequestError('세션 파일 삭제 실패', { message: e.message });
+      return { ok: false, message: '세션 파일 삭제 실패: ' + (e.message || e) };
     }
     this.pending = null;
     return { ok: true };
