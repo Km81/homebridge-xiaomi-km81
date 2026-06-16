@@ -94,7 +94,7 @@ class UiServer extends HomebridgePluginUiServer {
       await miCloud.login(username, password);
       const data = this._saveSession(miCloud);
       this.pending = null;
-      return { ok: true, status: 'saved', country: data.country, userId: data.session.userId, path: this._sessionPath() };
+      return { ok: true, status: 'saved', country: data.country, userId: data.session.userId, timestamp: data.session.timestamp, path: this._sessionPath() };
     } catch (e) {
       if (e && e.notificationUrl) {
         this.pending = { miCloud, notificationUrl: e.notificationUrl };
@@ -113,7 +113,7 @@ class UiServer extends HomebridgePluginUiServer {
       await this.pending.miCloud.loginTwoFa(this.pending.notificationUrl, ticket);
       if (!this.pending.miCloud.isLoggedIn()) return { ok: false, message: '인증코드는 처리됐지만 세션을 받지 못했습니다. 코드를 다시 확인하세요.' };
       const data = this._saveSession(this.pending.miCloud);
-      const out = { ok: true, status: 'saved', country: data.country, userId: data.session.userId, path: this._sessionPath() };
+      const out = { ok: true, status: 'saved', country: data.country, userId: data.session.userId, timestamp: data.session.timestamp, path: this._sessionPath() };
       this.pending = null;
       return out;
     } catch (e) {

@@ -18,6 +18,7 @@
     .km81-url { word-break: break-all; background: #f4f5f7; padding: 8px; border-radius: 6px; font-size: 0.82rem; display: block; }
     .km81-hidden { display: none !important; }
     .km81-pw-wrap { position: relative; }
+    .km81-pw-wrap .form-control { padding-right: 56px; }
     .km81-pw-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 0.78rem; color: #6c757d; background: none; border: none; }
     table.km81-dev { width: 100%; font-size: 0.82rem; border-collapse: collapse; }
     table.km81-dev th, table.km81-dev td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
@@ -85,7 +86,7 @@
     </p>
     <div class="km81-actions">
       <button id="scanBtn" class="btn btn-primary" disabled>기기 불러오기 / 서버 검출</button>
-      <span id="scanHint" class="km81-muted">서버 준비 후 사용 가능</span>
+      <span id="scanHint" class="km81-muted">설정 도우미 서버 준비 후 사용 가능</span>
     </div>
     <div id="scanErrors" class="km81-muted" style="margin-top:8px;"></div>
     <div id="devTableWrap" style="margin-top:12px; overflow-x:auto;"></div>
@@ -124,7 +125,7 @@
         $('loginBtn').disabled = !ready;
         $('scanBtn').disabled = !ready;
         if (ready) { hide('serverHint'); $('scanHint').textContent = ''; }
-        else { $('scanHint').textContent = '서버 준비 후 사용 가능'; }
+        else { $('scanHint').textContent = '설정 도우미 서버 준비 후 사용 가능'; }
       }
 
       // 세션 상태에 따라 화면 구성
@@ -148,6 +149,7 @@
       async function refreshStatus() {
         if (_statusRunning) return;
         _statusRunning = true;
+        $('refreshBtn').disabled = true;
         try {
           // 1) 캐시 즉시 표시(서버 spawn 대기 없이 0초). 단 버튼은 서버 확인 전까지 비활성.
           var cached = loadCache();
@@ -159,6 +161,7 @@
           //    살아나는 즉시 잡아 버튼 활성화. 실패 시 캐시 유지(멈춤/경고 없음).
           var attempts = 8;
           for (var i = 1; i <= attempts; i++) {
+            $('serverHint').textContent = '· 설정 도우미 서버 깨우는 중… (' + i + '/' + attempts + ')';
             try {
               var s = await reqT('/status', undefined, 8000);
               setServerReady(true);
@@ -169,10 +172,10 @@
               if (i < attempts) { await sleep(1000); continue; }
               setServerReady(false);
               if (cached) applySession(cached, '(캐시 기준 · 서버 확인 보류 — "상태 새로고침")');
-              else setStatus('none', '클라우드 UI 서버가 응답하지 않습니다. "상태 새로고침"을 누르거나 컨테이너 재시작 후 다시 열어보세요. (아래 장치 설정은 정상 사용 가능)');
+              else setStatus('none', '설정 도우미 서버가 응답하지 않습니다. "상태 새로고침"을 누르거나 컨테이너 재시작 후 다시 열어보세요. (아래 장치 설정은 정상 사용 가능)');
             }
           }
-        } finally { _statusRunning = false; }
+        } finally { _statusRunning = false; $('refreshBtn').disabled = false; }
       }
 
       function onSaved(s) {
