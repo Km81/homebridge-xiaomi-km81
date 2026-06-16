@@ -86,6 +86,7 @@ class UiServer extends HomebridgePluginUiServer {
     let miCloud;
     try { miCloud = new (getMiCloud())(this._quietLogger()); }
     catch (e) { return { ok: false, message: 'MiCloud 모듈 로드 실패: ' + (e.message || e) }; }
+    if (typeof miCloud.setRequestTimeout === 'function') miCloud.setRequestTimeout(10000); // 로그인은 느릴 수 있어 여유있게(무한 hang 은 방지)
     try { miCloud.setCountry(String(country || 'cn').toLowerCase()); }
     catch (e) { miCloud.setCountry('cn'); }
 
@@ -140,6 +141,7 @@ class UiServer extends HomebridgePluginUiServer {
     let miCloud;
     try { miCloud = new (getMiCloud())(this._quietLogger()); }
     catch (e) { return { ok: false, message: 'MiCloud 모듈 로드 실패: ' + (e.message || e) }; }
+    if (typeof miCloud.setRequestTimeout === 'function') miCloud.setRequestTimeout(10000);
     miCloud.setServiceToken(sess.session);
     if (!miCloud.isLoggedIn()) return { ok: false, message: '세션이 유효하지 않습니다. 다시 로그인하세요.' };
 
