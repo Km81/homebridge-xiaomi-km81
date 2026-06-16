@@ -25,6 +25,7 @@
     </p>
 
     <div id="statusBox" class="km81-status wait">세션 상태 확인 중…</div>
+    <div style="margin:-6px 0 12px 0;"><button id="retryStatusBtn" class="btn btn-link btn-sm" style="padding:0;">다시 시도</button></div>
 
     <div id="loginStep">
       <div class="km81-row">
@@ -80,6 +81,7 @@
           new Promise(function (_, rej) { setTimeout(function () { rej(new Error('서버 응답 시간 초과(' + Math.round(ms / 1000) + 's)')); }, ms); }),
         ]);
       }
+      function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
       var defaultCountry = null;
       var schemaShown = false;
@@ -94,20 +96,32 @@
       function showLogin() { $('loginStep').classList.remove('km81-hidden'); $('ticketStep').classList.add('km81-hidden'); }
       function showTicket(url) { $('twoFaUrl').textContent = url; $('twoFaUrl').href = url; $('loginStep').classList.add('km81-hidden'); $('ticketStep').classList.remove('km81-hidden'); }
 
+      var _statusRunning = false;
       async function refreshStatus() {
-        setStatus('wait', '세션 상태 확인 중…');
+        if (_statusRunning) return;
+        _statusRunning = true;
+        // UI 서버는 설정 화면을 열 때 새로 spawn 되는데, NAS 등에서 cold-start 가 느리면
+        // 첫 요청이 타임아웃될 수 있다. 한 번 살아나면 이후엔 빠르므로 여러 번 재시도한다.
+        var attempts = 5;
         try {
-          var s = await reqT('/status', undefined, 12000);
-          if (s && s.exists) {
-            setStatus('ok', '세션 저장됨 ✓  지역: ' + (s.country || '?') + (s.userId ? ',  userId: ' + s.userId : '') + (s.loggedInAt ? ',  로그인: ' + s.loggedInAt : ''));
-            $('clearRow').classList.remove('km81-hidden');
-          } else {
-            setStatus('none', '저장된 세션이 없습니다. 아래에서 로그인하세요.');
-            $('clearRow').classList.add('km81-hidden');
+          for (var i = 1; i <= attempts; i++) {
+            setStatus('wait', i === 1 ? '세션 상태 확인 중…' : ('세션 서버 준비 중… (재시도 ' + i + '/' + attempts + ')'));
+            try {
+              var s = await reqT('/status', undefined, 15000);
+              if (s && s.exists) {
+                setStatus('ok', '세션 저장됨 ✓  지역: ' + (s.country || '?') + (s.userId ? ',  userId: ' + s.userId : '') + (s.loggedInAt ? ',  로그인: ' + s.loggedInAt : ''));
+                $('clearRow').classList.remove('km81-hidden');
+              } else {
+                setStatus('none', '저장된 세션이 없습니다. 아래에서 로그인하세요.');
+                $('clearRow').classList.add('km81-hidden');
+              }
+              return; // 성공 → 종료
+            } catch (e) {
+              if (i < attempts) { await sleep(1500); continue; }
+              setStatus('none', '클라우드 UI 서버가 응답하지 않습니다(' + (e.message || e) + '). "다시 시도"를 누르거나, 컨테이너 재시작 후 다시 열어보세요. 아래 장치 설정은 정상 사용 가능합니다.');
+            }
           }
-        } catch (e) {
-          setStatus('none', '클라우드 UI 서버가 응답하지 않습니다(' + (e.message || e) + '). 플러그인 재설치 또는 Homebridge UI 재시작이 필요할 수 있어요. 아래 장치 설정은 정상 사용 가능합니다.');
-        }
+        } finally { _statusRunning = false; }
       }
 
       function onSaved() { showLogin(); hb.toast.success('MiCloud 세션을 저장했습니다. Homebridge를 재시작하면 적용됩니다.', '완료'); refreshStatus(); }
@@ -139,6 +153,7 @@
 
         $('cancelBtn').addEventListener('click', showLogin);
         $('reloginBtn').addEventListener('click', showLogin);
+        $('retryStatusBtn').addEventListener('click', refreshStatus);
 
         $('clearBtn').addEventListener('click', async function () {
           hb.showSpinner();
