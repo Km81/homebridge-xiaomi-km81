@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <style>
+    .km81-card { border: 1px solid #d9dde2; border-radius: 8px; padding: 16px; margin-bottom: 18px; }
+    .km81-card h4 { margin-top: 0; }
+    .km81-muted { color: #6c757d; font-size: 0.85rem; }
+    .km81-status { padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; font-size: 0.9rem; }
+    .km81-status.ok { background: #e6f4ea; color: #1e7e34; }
+    .km81-status.none { background: #fdecea; color: #b02a37; }
+    .km81-row { margin-bottom: 10px; }
+    .km81-url { word-break: break-all; background:#f4f5f7; padding:8px; border-radius:6px; font-size:0.82rem; }
+    .km81-hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="km81-card">
+    <h4>MiCloud 클라우드 세션 (2단계 인증)</h4>
+    <p class="km81-muted">
+      신형 기기(예: 타워팬 p45)를 클라우드/하이브리드로 제어하려면 MiCloud 세션이 필요합니다.
+      2단계 인증(2FA) 계정도 여기서 한 번 로그인하면 세션이 자동 저장되고, 이후엔 재입력이 필요 없습니다.
+      비밀번호는 저장되지 않고 세션 토큰만 보관됩니다.
+    </p>
+
+    <div id="statusBox" class="km81-status none">세션 상태 확인 중…</div>
+
+    <!-- 1단계: 로그인 -->
+    <div id="loginStep">
+      <div class="km81-row">
+        <label>지역 서버</label>
+        <select id="country" class="form-control">
+          <option value="tw">대만 (tw)</option>
+          <option value="cn">중국 (cn)</option>
+          <option value="sg">싱가포르 (sg)</option>
+          <option value="de">독일 (de)</option>
+          <option value="us">미국 (us)</option>
+          <option value="ru">러시아 (ru)</option>
+          <option value="in">인도 (in)</option>
+          <option value="i2">i2</option>
+        </select>
+        <small class="km81-muted">기기가 등록된 지역으로 고르세요 (토큰 추출 화면의 지역 열과 동일).</small>
+      </div>
+      <div class="km81-row">
+        <label>Mi 계정 (이메일/아이디)</label>
+        <input id="username" type="text" class="form-control" autocomplete="username">
+      </div>
+      <div class="km81-row">
+        <label>Mi 비밀번호</label>
+        <input id="password" type="password" class="form-control" autocomplete="current-password">
+      </div>
+      <button id="loginBtn" class="btn btn-primary">로그인 / 세션 만들기</button>
+    </div>
+
+    <!-- 2단계: 2FA 인증코드 -->
+    <div id="ticketStep" class="km81-hidden">
+      <div class="km81-status none">2단계 인증이 필요합니다. 아래 URL을 새 탭에서 열어 SMS/이메일로 인증코드를 받으세요.</div>
+      <div class="km81-row">
+        <a id="twoFaUrl" href="#" target="_blank" rel="noopener" class="km81-url"></a>
+      </div>
+      <div class="km81-row">
+        <label>받은 인증코드 (ticket)</label>
+        <input id="ticket" type="text" class="form-control" autocomplete="one-time-code">
+      </div>
+      <button id="ticketBtn" class="btn btn-primary">인증코드 제출</button>
+      <button id="cancelBtn" class="btn btn-secondary">취소</button>
+    </div>
+
+    <!-- 세션 있을 때: 삭제 -->
+    <div id="clearRow" class="km81-row km81-hidden" style="margin-top:12px;">
+      <button id="clearBtn" class="btn btn-danger btn-sm">저장된 세션 삭제</button>
+      <button id="reloginBtn" class="btn btn-link btn-sm">다시 로그인</button>
+    </div>
+  </div>
+
+  <script>
+    (async () => {
+      const $ = (id) => document.getElementById(id);
+
+      // 기존 설정에서 기본 지역 채우기
+      try {
+        const cfgs = await homebridge.getPluginConfig();
+        const pf = (cfgs || []).find(c => c && c.micloud);
+        const c = pf && pf.micloud && pf.micloud.country;
+        if (c) $('country').value = String(c).toLowerCase();
+      } catch (e) { /* ignore */ }
+
+      function showLogin() {
+        $('loginStep').classList.remove('km81-hidden');
+        $('ticketStep').classList.add('km81-hidden');
+      }
+      function showTicket(url) {
+        $('twoFaUrl').textContent = url;
+        $('twoFaUrl').href = url;
+        $('loginStep').classList.add('km81-hidden');
+        $('ticketStep').classList.remove('km81-hidden');
+      }
+
+      async function refreshStatus() {
+        try {
+          const s = await homebridge.request('/status');
+          if (s && s.exists) {
+            $('statusBox').className = 'km81-status ok';
+            $('statusBox').textContent = `세션 저장됨 ✓  지역: ${s.country || '?'}` + (s.userId ? `,  userId: ${s.userId}` : '') + (s.loggedInAt ? `,  로그인: ${s.loggedInAt}` : '');
+            $('clearRow').classList.remove('km81-hidden');
+          } else {
+            $('statusBox').className = 'km81-status none';
+            $('statusBox').textContent = '저장된 세션이 없습니다. 아래에서 로그인하세요.';
+            $('clearRow').classList.add('km81-hidden');
+          }
+        } catch (e) {
+          $('statusBox').className = 'km81-status none';
+          $('statusBox').textContent = '상태 확인 실패: ' + (e.message || e);
+        }
+      }
+
+      function onSaved(res) {
+        showLogin();
+        homebridge.toast.success('MiCloud 세션을 저장했습니다. Homebridge를 재시작하면 적용됩니다.', '완료');
+        refreshStatus();
+      }
+
+      $('loginBtn').addEventListener('click', async () => {
+        const username = $('username').value.trim();
+        const password = $('password').value;
+        const country = $('country').value;
+        if (!username || !password) { homebridge.toast.error('아이디와 비밀번호를 입력하세요.'); return; }
+        homebridge.showSpinner();
+        let res;
+        try { res = await homebridge.request('/login', { username, password, country }); }
+        catch (e) { homebridge.hideSpinner(); homebridge.toast.error(e.message || '요청 실패'); return; }
+        homebridge.hideSpinner();
+        if (!res || !res.ok) { homebridge.toast.error((res && res.message) || '로그인 실패'); return; }
+        if (res.status === '2fa') { showTicket(res.notificationUrl); homebridge.toast.info('2단계 인증이 필요합니다.'); }
+        else { onSaved(res); }
+      });
+
+      $('ticketBtn').addEventListener('click', async () => {
+        const ticket = $('ticket').value.trim();
+        if (!ticket) { homebridge.toast.error('인증코드를 입력하세요.'); return; }
+        homebridge.showSpinner();
+        let res;
+        try { res = await homebridge.request('/submitTicket', { ticket }); }
+        catch (e) { homebridge.hideSpinner(); homebridge.toast.error(e.message || '요청 실패'); return; }
+        homebridge.hideSpinner();
+        if (!res || !res.ok) { homebridge.toast.error((res && res.message) || '인증 실패'); return; }
+        $('ticket').value = '';
+        onSaved(res);
+      });
+
+      $('cancelBtn').addEventListener('click', () => showLogin());
+      $('reloginBtn').addEventListener('click', () => showLogin());
+
+      $('clearBtn').addEventListener('click', async () => {
+        homebridge.showSpinner();
+        try { await homebridge.request('/clear'); homebridge.toast.success('세션을 삭제했습니다.'); }
+        catch (e) { homebridge.toast.error(e.message || '삭제 실패'); }
+        homebridge.hideSpinner();
+        refreshStatus();
+      });
+
+      await refreshStatus();
+
+      // 기존 스키마 기반 설정 폼(장치 목록 등)은 그대로 아래에 표시
+      homebridge.showSchemaForm();
+    })();
+  </script>
+</body>
+</html>

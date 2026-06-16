@@ -27,6 +27,7 @@
   "author": "Km81",
   "license": "MIT",
   "dependencies": {
+    "@homebridge/plugin-ui-utils": "^2.0.0",
     "miio": "^0.15.6",
     "node-fetch": "^2.7.0",
     "randomstring": "^1.3.0"
@@ -35,6 +36,8 @@
     "index.js",
     "config.schema.json",
     "lib/",
+    "homebridge-ui/",
+    "tools/",
     "README.md",
     "LICENSE"
   ],

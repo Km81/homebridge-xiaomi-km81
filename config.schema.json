@@ -2,6 +2,7 @@
   "pluginAlias": "XiaomiKm81",
   "pluginType": "platform",
   "singular": true,
+  "customUi": true,
   "headerDisplay": "Xiaomi 5종(선풍기 / 공기청정기 / 멀티탭 / 공기측정기 / 가습기)을 하나의 플랫폼으로 통합 관리합니다. Homebridge 2.0 호환. 장치 추가 시 '장치 종류' 드롭다운에서 선택하면 해당 장치에 맞는 항목만 표시됩니다.",
   "footerDisplay": "자세한 설명은 [README](https://github.com/Km81/homebridge-xiaomi-km81#설정) 를 참고하세요.",
 

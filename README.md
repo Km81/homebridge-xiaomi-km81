@@ -139,11 +139,12 @@ v1.2+ 부터 miot 선풍기는 `miio` 패키지 대신 **dgram 기반 로컬 프
    ```
 
 주의:
-- **2단계 인증(2FA)이 켜진 계정**(샤오미가 일부 지역에 강제 적용)은 config 의 ID/PW만으로 로그인이 안 됩니다. 대신 **세션 캐시**를 한 번 만들면 됩니다 — Homebridge 호스트에서:
+- **2단계 인증(2FA)이 켜진 계정**(샤오미가 일부 지역에 강제 적용)은 config 의 ID/PW만으로 로그인이 안 됩니다. 가장 쉬운 방법은 **Homebridge UI 설정 화면**입니다 — 플러그인 **Settings** 를 열면 상단에 **"MiCloud 클라우드 세션 (2단계 인증)"** 패널이 있습니다. 지역·계정·비밀번호를 넣고 **로그인** → 2FA가 필요하면 인증 URL이 표시되니 브라우저에서 열어 코드를 받고 **인증코드 제출** 하면 세션이 자동 저장됩니다(비밀번호는 저장되지 않음). 저장 후 **Homebridge 재시작**하면 적용됩니다.
+- 터미널을 선호하면 동일한 작업을 CLI 로도 할 수 있습니다 (Homebridge 호스트에서):
   ```bash
-  node tools/micloud-login.js --country sg
+  node tools/micloud-login.js --country tw --out <storage>/xiaomi-km81-micloud-session.json
   ```
-  Mi 계정/비밀번호 → 2FA 인증 URL → 인증코드 입력을 거쳐 세션 파일을 만듭니다. 그 파일을 Homebridge storage 폴더(예: `~/.homebridge/`)에 **`xiaomi-km81-micloud-session.json`** 이름으로 두면, 플러그인이 자동으로 그 세션으로 인증합니다(재시작해도 유지). 세션 만료 시 다시 실행하세요. (또는 출력된 JSON을 config 의 `micloud.serviceToken` 에 넣어도 됩니다.)
+  세션 파일(`xiaomi-km81-micloud-session.json`)을 Homebridge storage 폴더에 두면 플러그인이 자동으로 읽습니다(재시작해도 유지). 세션 만료 시 다시 만드세요. (또는 출력된 JSON을 config 의 `micloud.serviceToken` 에 넣어도 됩니다.)
 - 비2FA 계정은 config 의 username/password 로 로그인하며, 성공한 세션을 자동으로 위 캐시 파일에 저장합니다.
 - 비밀번호가 config.json에 평문 저장되니 유의하세요.
 - 로컬이 안정적인 기기는 켤 필요 없습니다(로컬이 더 빠름).
