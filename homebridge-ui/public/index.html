@@ -51,6 +51,7 @@
 
       <div class="km81-actions">
         <button id="refreshBtn" class="btn btn-link btn-sm">새로고침</button>
+        <button id="reloadBtn" class="btn btn-link btn-sm km81-hidden" style="font-weight:600;">↻ 페이지 새로고침</button>
         <button id="showLoginBtn" class="btn btn-link btn-sm km81-hidden">계정 로그인</button>
         <button id="clearBtn" class="btn btn-link btn-sm km81-hidden" style="color:#b02a37;">세션 삭제</button>
       </div>
@@ -161,13 +162,17 @@
       async function ensureServer(timeout) {
         try {
           var s = await reqT('/status', undefined, timeout || 6000);
+          hide('reloadBtn');
           applySession(s, null);
           saveCache({ exists: !!(s && s.exists), country: s && s.country, userId: s && s.userId, loggedInAt: s && s.loggedInAt, timestamp: s && s.timestamp });
           return true;
         } catch (e) {
+          // 도우미 서버가 (다른 플러그인 갔다 온 뒤 등) 연결이 어긋난 상태. SPA 특성상 재시도로는
+          // 안 풀리고 '전체 페이지 새로고침'이 확실한 해결책 → 원클릭 버튼을 띄운다.
+          show('reloadBtn');
           var cached = loadCache();
-          if (cached) applySession(cached, '(캐시 기준 · 도우미 서버 미응답 — 설정 창을 닫았다 다시 여세요)');
-          else { setStatus('none', '설정 도우미 서버에 연결하지 못했습니다. 설정 창을 닫았다가 다시 열어주세요(서버 재시작). 세션이 이미 있으면 타워팬은 정상 작동합니다.'); setSummary('none', '서버 미응답 — 창 다시 열기'); }
+          if (cached) applySession(cached, '(캐시 기준 · 도우미 서버 미응답 — ↻ 페이지 새로고침)');
+          else { setStatus('none', '설정 도우미 서버에 연결하지 못했습니다. 위의 "↻ 페이지 새로고침"(또는 브라우저 F5)을 누르면 거의 해결됩니다. 세션이 이미 있으면 타워팬은 정상 작동합니다.'); setSummary('none', '서버 미응답 — 페이지 새로고침'); }
           return false;
         }
       }
@@ -204,6 +209,10 @@
       function wire() {
         bindCollapse();
         $('refreshBtn').addEventListener('click', refreshStatus);
+        // 전체 페이지 새로고침 = 도우미 서버 연결을 깨끗하게 다시 맺는 가장 확실한 방법.
+        $('reloadBtn').addEventListener('click', function () {
+          try { (window.top || window).location.reload(); } catch (e) { window.location.reload(); }
+        });
         $('showLoginBtn').addEventListener('click', function () { showLogin(); $('username').focus(); });
 
         $('pwToggle').addEventListener('click', function () {
