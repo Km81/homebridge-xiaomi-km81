@@ -28,9 +28,9 @@
   </style>
 </head>
 <body>
-  <!-- ========== 카드 1: MiCloud 세션 ========== -->
+  <!-- ========== 카드: MiCloud 로그인 캐시 ========== -->
   <div class="km81-card">
-    <h4>☁️ MiCloud 클라우드 세션</h4>
+    <h4>MiCloud 로그인 캐시 등록</h4>
     <p class="km81-sub">
       타워팬 같은 신형 기기를 <b>클라우드/하이브리드</b>로 제어할 때 필요합니다. 한 번 로그인하면 세션이 저장되고
       이후엔 자동 인증돼요(2단계 인증 계정도 가능). 비밀번호는 저장되지 않고 토큰만 보관됩니다.
@@ -39,13 +39,13 @@
     <div id="statusBox" class="km81-status wait">서버 준비 중…</div>
 
     <div class="km81-actions">
-      <button id="refreshBtn" class="btn btn-link btn-sm">상태 새로고침</button>
-      <button id="showLoginBtn" class="btn btn-link btn-sm km81-hidden">다른 계정으로 로그인</button>
+      <button id="refreshBtn" class="btn btn-link btn-sm">새로고침</button>
+      <button id="showLoginBtn" class="btn btn-link btn-sm km81-hidden">계정 로그인</button>
       <button id="clearBtn" class="btn btn-link btn-sm km81-hidden" style="color:#b02a37;">세션 삭제</button>
       <span id="serverHint" class="km81-muted km81-hidden">· 서버 준비되면 버튼이 활성화됩니다</span>
     </div>
 
-    <!-- 로그인 폼: 세션 있으면 숨김, 없거나 '다른 계정으로 로그인' 누르면 표시 -->
+    <!-- 로그인 폼: 세션 있으면 숨김, 없거나 '계정 로그인' 누르면 표시 -->
     <div id="loginStep" class="km81-hidden" style="margin-top:8px;">
       <div class="km81-row">
         <label>Mi 계정 (이메일/아이디)</label>
@@ -74,18 +74,18 @@
       <button id="cancelBtn" class="btn btn-secondary">취소</button>
     </div>
 
-    <p class="km81-muted" style="margin:12px 0 0 0;">세션은 보통 수 주~수 개월 유효합니다. 만료되면(클라우드 폴링이 실패하면) "다른 계정으로 로그인"으로 다시 만들면 됩니다.</p>
+    <p class="km81-muted" style="margin:12px 0 0 0;">세션은 보통 수 주~수 개월 유효합니다. 만료되면(클라우드 폴링이 실패하면) "계정 로그인"으로 다시 만들면 됩니다.</p>
   </div>
 
   <!-- ========== 카드 2: 등록 기기 검출 ========== -->
   <div class="km81-card">
-    <h4>🔍 등록 기기 검출 (IP · 토큰 · 서버)</h4>
+    <h4>MiCloud 등록기기 검출</h4>
     <p class="km81-sub">
       계정에 등록된 기기들의 <b>IP · 토큰 · 모델 · Device ID</b> 와 각 기기가 등록된 <b>지역(서버)</b>을 찾아줍니다.
       여러 지역을 조회하므로 <b>수십 초</b> 걸릴 수 있어요. 자동 등록은 하지 않으며, 값을 복사해 아래 장치 설정에 직접 넣으세요.
     </p>
     <div class="km81-actions">
-      <button id="scanBtn" class="btn btn-primary" disabled>기기 불러오기 / 서버 검출</button>
+      <button id="scanBtn" class="btn btn-primary" disabled>불러오기</button>
       <span id="scanHint" class="km81-muted">설정 도우미 서버 준비 후 사용 가능</span>
     </div>
     <div id="scanErrors" class="km81-muted" style="margin-top:8px;"></div>
@@ -112,8 +112,13 @@
       function saveCache(o) { try { localStorage.setItem('km81_sess', JSON.stringify(o)); } catch (e) { } }
 
       function fmtTime(s) {
-        if (s && s.timestamp) { try { return new Date(s.timestamp).toLocaleString(); } catch (e) { } }
-        return (s && s.loggedInAt) ? (s.loggedInAt + ' UTC') : '';
+        var d = null;
+        if (s && s.timestamp) d = new Date(s.timestamp);
+        else if (s && s.loggedInAt) d = new Date(String(s.loggedInAt).replace(' ', 'T') + 'Z'); // 저장값은 UTC → Date 로 파싱
+        if (!d || isNaN(d.getTime())) return '';
+        var tz = '';
+        try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { }
+        return d.toLocaleString() + (tz ? ' (' + tz + ')' : '');
       }
 
       var serverReady = false;
@@ -159,9 +164,11 @@
 
           // 2) 서버 확인. cold-start 가 느릴 수 있어 짧은 타임아웃으로 여러 번 시도 →
           //    살아나는 즉시 잡아 버튼 활성화. 실패 시 캐시 유지(멈춤/경고 없음).
-          var attempts = 8;
+          // NAS 부하 시 도우미 서버 spawn 이 아주 느릴 수 있어 넉넉히(약 3분) 재시도한다.
+          // 한 번 살아나면 즉시 잡아 버튼 활성화. 폴링 자체는 가벼워 본체 부하를 늘리지 않음.
+          var attempts = 14;
           for (var i = 1; i <= attempts; i++) {
-            $('serverHint').textContent = '· 설정 도우미 서버 깨우는 중… (' + i + '/' + attempts + ')';
+            $('serverHint').textContent = '· 설정 도우미 서버 깨우는 중… (' + i + '/' + attempts + ', NAS 부하 시 시간이 걸려요)';
             try {
               var s = await reqT('/status', undefined, 8000);
               setServerReady(true);
@@ -169,10 +176,10 @@
               saveCache({ exists: !!(s && s.exists), country: s && s.country, userId: s && s.userId, loggedInAt: s && s.loggedInAt, timestamp: s && s.timestamp });
               return;
             } catch (e) {
-              if (i < attempts) { await sleep(1000); continue; }
+              if (i < attempts) { await sleep(i < 6 ? 1000 : 8000); continue; }
               setServerReady(false);
-              if (cached) applySession(cached, '(캐시 기준 · 서버 확인 보류 — "상태 새로고침")');
-              else setStatus('none', '설정 도우미 서버가 응답하지 않습니다. "상태 새로고침"을 누르거나 컨테이너 재시작 후 다시 열어보세요. (아래 장치 설정은 정상 사용 가능)');
+              if (cached) applySession(cached, '(캐시 기준 · 서버 확인 보류 — "새로고침")');
+              else setStatus('none', '설정 도우미 서버가 응답하지 않습니다. "새로고침"을 누르거나 컨테이너 재시작 후 다시 열어보세요. (아래 장치 설정은 정상 사용 가능)');
             }
           }
         } finally { _statusRunning = false; $('refreshBtn').disabled = false; }

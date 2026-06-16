@@ -198,7 +198,7 @@
     "name",
     {
       "type": "fieldset",
-      "title": "MiCloud (클라우드 제어 · 선택)",
+      "title": "MiCloud 기기 등록",
       "expandable": true,
       "expanded": false,
       "description": "로컬 연결이 불안정한 신형 기기(예: xiaomi.fan.p45)를 클라우드로 제어할 때만 입력하세요.",
