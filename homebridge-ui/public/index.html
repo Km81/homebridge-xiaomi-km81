@@ -28,7 +28,6 @@
     <!-- 1단계: 로그인 -->
     <div id="loginStep">
       <div class="km81-row">
-      <div class="km81-row">
         <label>Mi 계정 (이메일/아이디)</label>
         <input id="username" type="text" class="form-control" autocomplete="username">
       </div>
@@ -76,6 +75,17 @@
     (async () => {
       const $ = (id) => document.getElementById(id);
 
+      // 커스텀 UI 서버가 죽거나 느려도 "장치 설정 폼"은 항상 뜨도록 스키마 폼을 먼저 표시한다.
+      try { homebridge.showSchemaForm(); } catch (e) { /* ignore */ }
+
+      // homebridge.request 가 (서버 크래시/미설치 등으로) 영영 안 돌아오는 것 방지: 타임아웃 래퍼.
+      function reqT(path, body, ms) {
+        return Promise.race([
+          homebridge.request(path, body),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('서버 응답 시간 초과(' + Math.round(ms / 1000) + 's)')), ms)),
+        ]);
+      }
+
       // 기존 설정의 기본 지역(있으면)을 캐시 저장 시 기본값으로 쓴다. 로그인 자체와는 무관.
       let defaultCountry = null;
       try {
@@ -98,7 +108,7 @@
 
       async function refreshStatus() {
         try {
-          const s = await homebridge.request('/status');
+          const s = await reqT('/status', undefined, 12000);
           if (s && s.exists) {
             $('statusBox').className = 'km81-status ok';
             $('statusBox').textContent = `세션 저장됨 ✓  지역: ${s.country || '?'}` + (s.userId ? `,  userId: ${s.userId}` : '') + (s.loggedInAt ? `,  로그인: ${s.loggedInAt}` : '');
@@ -110,7 +120,7 @@
           }
         } catch (e) {
           $('statusBox').className = 'km81-status none';
-          $('statusBox').textContent = '상태 확인 실패: ' + (e.message || e);
+          $('statusBox').textContent = '세션 상태 확인 실패: ' + (e.message || e) + ' — 플러그인 업데이트 후 Homebridge UI(또는 Homebridge) 재시작이 필요할 수 있어요. 아래 장치 설정은 정상 사용 가능합니다.';
         }
       }
 
@@ -126,7 +136,7 @@
         if (!username || !password) { homebridge.toast.error('아이디와 비밀번호를 입력하세요.'); return; }
         homebridge.showSpinner();
         let res;
-        try { res = await homebridge.request('/login', { username, password, country: defaultCountry }); }
+        try { res = await reqT('/login', { username, password, country: defaultCountry }, 30000); }
         catch (e) { homebridge.hideSpinner(); homebridge.toast.error(e.message || '요청 실패'); return; }
         homebridge.hideSpinner();
         if (!res || !res.ok) { homebridge.toast.error((res && res.message) || '로그인 실패'); return; }
@@ -139,7 +149,7 @@
         if (!ticket) { homebridge.toast.error('인증코드를 입력하세요.'); return; }
         homebridge.showSpinner();
         let res;
-        try { res = await homebridge.request('/submitTicket', { ticket }); }
+        try { res = await reqT('/submitTicket', { ticket }, 30000); }
         catch (e) { homebridge.hideSpinner(); homebridge.toast.error(e.message || '요청 실패'); return; }
         homebridge.hideSpinner();
         if (!res || !res.ok) { homebridge.toast.error((res && res.message) || '인증 실패'); return; }
@@ -152,7 +162,7 @@
 
       $('clearBtn').addEventListener('click', async () => {
         homebridge.showSpinner();
-        try { await homebridge.request('/clear'); homebridge.toast.success('세션을 삭제했습니다.'); }
+        try { await reqT('/clear', undefined, 10000); homebridge.toast.success('세션을 삭제했습니다.'); }
         catch (e) { homebridge.toast.error(e.message || '삭제 실패'); }
         homebridge.hideSpinner();
         refreshStatus();
@@ -181,7 +191,7 @@
         $('scanErrors').textContent = '';
         homebridge.showSpinner();
         let res;
-        try { res = await homebridge.request('/devices'); }
+        try { res = await reqT('/devices', undefined, 90000); }
         catch (e) { homebridge.hideSpinner(); homebridge.toast.error(e.message || '요청 실패'); return; }
         homebridge.hideSpinner();
         if (!res || !res.ok) { homebridge.toast.error((res && res.message) || '기기 조회 실패'); return; }
@@ -199,10 +209,7 @@
         } else { homebridge.toast.info(v); }
       });
 
-      await refreshStatus();
-
-      // 기존 스키마 기반 설정 폼(장치 목록 등)은 그대로 아래에 표시
-      homebridge.showSchemaForm();
+      refreshStatus();   // 비동기, 내부 타임아웃 — 폼 표시를 막지 않음
     })();
   </script>
 </body>

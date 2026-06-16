@@ -11,7 +11,15 @@
 const { HomebridgePluginUiServer, RequestError } = require('@homebridge/plugin-ui-utils');
 const fs = require('fs');
 const path = require('path');
-const MiCloud = require('../lib/common/MiCloud.js');
+
+// MiCloud(및 의존성 node-fetch/randomstring)를 모듈 로드 시점에 require 하면, 그 로드가
+// 실패할 경우 UI 서버 프로세스 전체가 죽어 모든 요청이 무한 대기(스피너/“확인 중” 멈춤)한다.
+// 핸들러에서 지연 로드해 그 실패를 격리한다(/status 와 서버 ready 는 영향받지 않음).
+let _MiCloud = null;
+function getMiCloud() {
+  if (!_MiCloud) _MiCloud = require('../lib/common/MiCloud.js');
+  return _MiCloud;
+}
 
 const SESSION_FILENAME = 'xiaomi-km81-micloud-session.json';
 
@@ -65,7 +73,9 @@ class UiServer extends HomebridgePluginUiServer {
     // 로그인은 지역과 무관(Mi 계정은 전역). country 는 캐시에 저장할 기본 지역값일 뿐이며,
     // 실제 기기 제어 지역은 기기별 miCloudCountry 로 지정한다. 그래서 미지정/미지원이어도
     // 로그인을 막지 않고 기본값으로 넘어간다.
-    const miCloud = new MiCloud(this._quietLogger());
+    let miCloud;
+    try { miCloud = new (getMiCloud())(this._quietLogger()); }
+    catch (e) { return { ok: false, message: 'MiCloud 모듈 로드 실패: ' + (e.message || e) }; }
     try { miCloud.setCountry(String(country || 'cn').toLowerCase()); }
     catch (e) { miCloud.setCountry('cn'); }
 
@@ -117,7 +127,9 @@ class UiServer extends HomebridgePluginUiServer {
     const sess = this._loadSession();
     if (!sess) return { ok: false, message: '먼저 위에서 로그인해 세션을 만드세요.' };
 
-    const miCloud = new MiCloud(this._quietLogger());
+    let miCloud;
+    try { miCloud = new (getMiCloud())(this._quietLogger()); }
+    catch (e) { return { ok: false, message: 'MiCloud 모듈 로드 실패: ' + (e.message || e) }; }
     miCloud.setServiceToken(sess.session);
     if (!miCloud.isLoggedIn()) return { ok: false, message: '세션이 유효하지 않습니다. 다시 로그인하세요.' };
 
