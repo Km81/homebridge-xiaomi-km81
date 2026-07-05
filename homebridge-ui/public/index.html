@@ -184,7 +184,7 @@
       async function refreshStatus() {
         if (_busy) return; _busy = true;
         $('refreshBtn').disabled = true; setSummary('', '확인 중…');
-        try { await ensureServer(8000); } finally { _busy = false; $('refreshBtn').disabled = false; }
+        try { await ensureServer(4000); } finally { _busy = false; $('refreshBtn').disabled = false; }
       }
 
       function onSaved(s) {
