@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <style>
+    .km81-card { border: 1px solid #d9dde2; border-radius: 10px; padding: 0; margin-bottom: 14px; overflow: hidden; }
+    .km81-head { display: flex; align-items: center; gap: 8px; padding: 12px 16px; cursor: pointer; user-select: none; }
+    .km81-head:hover { background: #f7f8fa; }
+    .km81-title { font-weight: 600; }
+    .km81-chev { display: inline-block; transition: transform .15s ease; color: #8a9099; font-size: 0.8rem; }
+    .km81-head.open .km81-chev { transform: rotate(90deg); }
+    .km81-summary { margin-left: auto; font-size: 0.82rem; color: #6c757d; font-weight: 400; text-align: right; }
+    .km81-summary.ok { color: #1e7e34; }
+    .km81-summary.none { color: #b02a37; }
+    .km81-body { padding: 0 16px 16px 16px; }
+    .km81-body.km81-collapsed { display: none; }
+    .km81-sub { color: #6c757d; font-size: 0.82rem; margin: 0 0 14px 0; line-height: 1.5; }
+    .km81-muted { color: #6c757d; font-size: 0.82rem; }
+    .km81-status { padding: 10px 12px; border-radius: 8px; margin-bottom: 10px; font-size: 0.9rem; line-height: 1.45; }
+    .km81-status.ok   { background: #e6f4ea; color: #1e7e34; border: 1px solid #bfe3c9; }
+    .km81-status.none { background: #fdecea; color: #b02a37; border: 1px solid #f3c4c0; }
+    .km81-status.wait { background: #fff6e5; color: #946200; border: 1px solid #f0dcb0; }
+    .km81-row { margin-bottom: 10px; }
+    .km81-row label { font-size: 0.85rem; font-weight: 500; margin-bottom: 3px; display: block; }
+    .km81-actions { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-bottom: 6px; }
+    .km81-actions .btn { padding: 0; }
+    .km81-url { word-break: break-all; background: #f4f5f7; padding: 8px; border-radius: 6px; font-size: 0.82rem; display: block; }
+    .km81-hidden { display: none !important; }
+    .km81-pw-wrap { position: relative; }
+    .km81-pw-wrap .form-control { padding-right: 56px; }
+    .km81-pw-toggle { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); cursor: pointer; font-size: 0.78rem; color: #6c757d; background: none; border: none; }
+    table.km81-dev { width: 100%; font-size: 0.82rem; border-collapse: collapse; }
+    table.km81-dev th, table.km81-dev td { padding: 6px 8px; border-bottom: 1px solid #eee; text-align: left; vertical-align: top; }
+    table.km81-dev th { color: #6c757d; font-weight: 600; }
+    table.km81-dev code { font-size: 0.78rem; }
+    .km81-chip { display: inline-block; background: #eef0f3; border-radius: 4px; padding: 1px 6px; font-size: 0.78rem; }
+  </style>
+</head>
+<body>
+  <!-- ========== 패널 1: MiCloud 로그인 캐시 등록 ========== -->
+  <div class="km81-card">
+    <div class="km81-head" data-target="body1"><span class="km81-chev">▸</span><span class="km81-title">MiCloud 로그인 캐시 등록</span><span id="sessionSummary" class="km81-summary">—</span></div>
+    <div id="body1" class="km81-body km81-collapsed">
+      <p class="km81-sub">
+        신형 기기(타워팬 등)를 <b>클라우드/하이브리드</b>로 제어하려면 MiCloud 세션이 필요합니다.
+        한 번 로그인하면 <b>토큰만 저장</b>되어 이후 자동 인증됩니다. 2단계 인증(2FA) 계정도 지원하며, 비밀번호는 저장하지 않습니다.
+        <br>아래 상태는 <b>저장된 캐시 기준</b>이라 즉시 표시됩니다(서버 접속 불필요). 로그인/삭제 등 변경할 때만 도우미 서버에 접속합니다.
+      </p>
+
+      <div id="statusBox" class="km81-status wait">상태 표시 준비 중…</div>
+
+      <div class="km81-actions">
+        <button id="refreshBtn" class="btn btn-link btn-sm">새로고침</button>
+        <button id="reloadBtn" class="btn btn-link btn-sm km81-hidden" style="font-weight:600;">↻ 페이지 새로고침</button>
+        <button id="showLoginBtn" class="btn btn-link btn-sm km81-hidden">계정 로그인</button>
+        <button id="clearBtn" class="btn btn-link btn-sm km81-hidden" style="color:#b02a37;">세션 삭제</button>
+      </div>
+
+      <!-- 로그인 폼 -->
+      <div id="loginStep" class="km81-hidden" style="margin-top:8px;">
+        <div class="km81-row">
+          <label>Mi 계정 (이메일/아이디)</label>
+          <input id="username" type="text" class="form-control" autocomplete="username">
+        </div>
+        <div class="km81-row">
+          <label>Mi 비밀번호</label>
+          <div class="km81-pw-wrap">
+            <input id="password" type="password" class="form-control" autocomplete="current-password">
+            <button type="button" id="pwToggle" class="km81-pw-toggle">표시</button>
+          </div>
+        </div>
+        <button id="loginBtn" class="btn btn-primary">로그인 / 세션 만들기</button>
+        <small class="km81-muted" style="display:block; margin-top:6px;">로그인은 지역과 무관합니다(Mi 계정은 전역). 기기별 등록 지역은 아래 <b>등록기기 검출</b>로 확인해 각 기기 설정의 <code>miCloudCountry</code> 에 넣으세요.</small>
+      </div>
+
+      <!-- 2단계 인증 -->
+      <div id="ticketStep" class="km81-hidden" style="margin-top:8px;">
+        <div class="km81-status none">2단계 인증이 필요합니다. 아래 URL을 새 탭에서 열어 SMS/이메일로 인증코드를 받으세요.</div>
+        <div class="km81-row"><a id="twoFaUrl" href="#" target="_blank" rel="noopener" class="km81-url"></a></div>
+        <div class="km81-row">
+          <label>받은 인증코드 (ticket)</label>
+          <input id="ticket" type="text" class="form-control" autocomplete="one-time-code">
+        </div>
+        <button id="ticketBtn" class="btn btn-primary">인증코드 제출</button>
+        <button id="cancelBtn" class="btn btn-secondary">취소</button>
+      </div>
+
+      <p class="km81-muted" style="margin:12px 0 0 0;">세션은 보통 수 주~수 개월 유효하며, 만료되면 <b>계정 로그인</b>으로 다시 만들면 됩니다. 터미널을 선호하면 <code>node tools/micloud-login.js</code> 로도 만들 수 있어요(서버 불필요).</p>
+    </div>
+  </div>
+
+  <!-- ========== 패널 2: MiCloud 등록기기 검출 ========== -->
+  <div class="km81-card">
+    <div class="km81-head" data-target="body2"><span class="km81-chev">▸</span><span class="km81-title">MiCloud 등록기기 검출</span><span id="scanSummary" class="km81-summary">IP · 토큰 · 서버 지역</span></div>
+    <div id="body2" class="km81-body km81-collapsed">
+      <p class="km81-sub">
+        계정의 모든 기기에서 <b>IP · 토큰 · 모델 · Device ID · 등록 지역(서버)</b>을 한 번에 찾아줍니다.
+        <b>자동 등록은 하지 않으니</b> 값을 복사해 아래 장치 설정에 직접 넣으세요. (여러 지역을 조회해 수십 초 소요)
+      </p>
+      <div class="km81-actions">
+        <button id="scanBtn" class="btn btn-primary">불러오기</button>
+        <span id="scanHint" class="km81-muted"></span>
+      </div>
+      <div id="scanErrors" class="km81-muted" style="margin-top:8px;"></div>
+      <div id="devTableWrap" style="margin-top:12px; overflow-x:auto;"></div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var hb = window.homebridge;
+      function $(id) { return document.getElementById(id); }
+      function setStatus(cls, text) { var b = $('statusBox'); if (b) { b.className = 'km81-status ' + cls; b.textContent = text; } }
+      function setSummary(cls, text) { var e = $('sessionSummary'); if (e) { e.className = 'km81-summary' + (cls ? ' ' + cls : ''); e.textContent = text; } }
+      function show(id) { var e = $(id); if (e) e.classList.remove('km81-hidden'); }
+      function hide(id) { var e = $(id); if (e) e.classList.add('km81-hidden'); }
+
+      function reqT(path, body, ms) {
+        return Promise.race([
+          hb.request(path, body),
+          new Promise(function (_, rej) { setTimeout(function () { rej(new Error('서버 응답 시간 초과(' + Math.round(ms / 1000) + 's)')); }, ms); }),
+        ]);
+      }
+      function loadCache() { try { return JSON.parse(localStorage.getItem('km81_sess') || 'null'); } catch (e) { return null; } }
+      function saveCache(o) { try { localStorage.setItem('km81_sess', JSON.stringify(o)); } catch (e) { } }
+
+      function fmtTime(s) {
+        var d = null;
+        if (s && s.timestamp) d = new Date(s.timestamp);
+        else if (s && s.loggedInAt) d = new Date(String(s.loggedInAt).replace(' ', 'T') + 'Z');
+        if (!d || isNaN(d.getTime())) return '';
+        var tz = '';
+        try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { }
+        return d.toLocaleString() + (tz ? ' (' + tz + ')' : '');
+      }
+
+      // 세션 상태에 따라 본문 + 헤더 요약 구성
+      function applySession(s, note) {
+        if (s && s.exists) {
+          var t = fmtTime(s);
+          setStatus('ok', '세션 저장됨 ✓   지역: ' + (s.country || '?') + (s.userId ? '   ·  userId: ' + s.userId : '') + (t ? '   ·  로그인: ' + t : '') + (note ? '   ' + note : ''));
+          setSummary('ok', '✓ ' + (s.country || '저장됨'));
+          show('showLoginBtn'); show('clearBtn');
+          hide('loginStep');
+        } else {
+          setStatus('none', '저장된 세션이 없습니다. "계정 로그인"으로 등록하세요.' + (note ? '   ' + note : ''));
+          setSummary('none', '세션 없음');
+          show('showLoginBtn'); hide('clearBtn');
+          hide('loginStep');
+        }
+      }
+
+      // 캐시만으로 즉시 표시 — 서버 접속하지 않음(설정 열 때마다 불안정한 spawn 을 건드리지 않음).
+      function showFromCache() {
+        var cached = loadCache();
+        if (cached) applySession(cached, '(저장된 캐시 — 변경할 때만 서버 접속)');
+        else { setStatus('wait', '세션 상태 미확인 — "새로고침"으로 확인하거나 "계정 로그인"으로 등록하세요.'); setSummary('', '미확인'); show('showLoginBtn'); hide('clearBtn'); }
+      }
+
+      // 필요할 때만(로그인/검출/새로고침) 서버에 1회 확인. 죽은 자식엔 재시도 무의미하므로
+      // 짧게 확인하고, 실패하면 '창 닫았다 다시 열기'를 안내(= 서버 재spawn).
+      async function ensureServer(timeout) {
+        try {
+          var s = await reqT('/status', undefined, timeout || 6000);
+          hide('reloadBtn');
+          applySession(s, null);
+          saveCache({ exists: !!(s && s.exists), country: s && s.country, userId: s && s.userId, loggedInAt: s && s.loggedInAt, timestamp: s && s.timestamp });
+          return true;
+        } catch (e) {
+          // 도우미 서버가 (다른 플러그인 갔다 온 뒤 등) 연결이 어긋난 상태. SPA 특성상 재시도로는
+          // 안 풀리고 '전체 페이지 새로고침'이 확실한 해결책 → 원클릭 버튼을 띄운다.
+          show('reloadBtn');
+          var cached = loadCache();
+          if (cached) applySession(cached, '(캐시 기준 · 도우미 서버 미응답 — ↻ 페이지 새로고침)');
+          else { setStatus('none', '설정 도우미 서버에 연결하지 못했습니다. 위의 "↻ 페이지 새로고침"(또는 브라우저 F5)을 누르면 거의 해결됩니다. 세션이 이미 있으면 타워팬은 정상 작동합니다.'); setSummary('none', '서버 미응답 — 페이지 새로고침'); }
+          return false;
+        }
+      }
+
+      function showLogin() { hide('ticketStep'); show('loginStep'); }
+      function showTicket(url) { $('twoFaUrl').textContent = url; $('twoFaUrl').href = url; hide('loginStep'); show('ticketStep'); }
+
+      var _busy = false;
+      async function refreshStatus() {
+        if (_busy) return; _busy = true;
+        $('refreshBtn').disabled = true; setSummary('', '확인 중…');
+        try { await ensureServer(4000); } finally { _busy = false; $('refreshBtn').disabled = false; }
+      }
+
+      function onSaved(s) {
+        hide('ticketStep'); hide('loginStep');
+        $('username').value = ''; $('password').value = '';
+        hb.toast.success('MiCloud 세션을 저장했습니다. Homebridge를 재시작하면 적용됩니다.', '완료');
+        if (s) { applySession({ exists: true, country: s.country, userId: s.userId, timestamp: s.timestamp }, null); saveCache({ exists: true, country: s.country, userId: s.userId, timestamp: s.timestamp }); }
+      }
+
+      function bindCollapse() {
+        var heads = document.querySelectorAll('.km81-head');
+        for (var i = 0; i < heads.length; i++) {
+          heads[i].addEventListener('click', function () {
+            var body = document.getElementById(this.getAttribute('data-target'));
+            if (!body) return;
+            var collapsed = body.classList.toggle('km81-collapsed');
+            this.classList.toggle('open', !collapsed);
+          });
+        }
+      }
+
+      function wire() {
+        bindCollapse();
+        $('refreshBtn').addEventListener('click', refreshStatus);
+        // 전체 페이지 새로고침 = 도우미 서버 연결을 깨끗하게 다시 맺는 가장 확실한 방법.
+        $('reloadBtn').addEventListener('click', function () {
+          try { (window.top || window).location.reload(); } catch (e) { window.location.reload(); }
+        });
+        $('showLoginBtn').addEventListener('click', function () { showLogin(); $('username').focus(); });
+
+        $('pwToggle').addEventListener('click', function () {
+          var p = $('password');
+          if (p.type === 'password') { p.type = 'text'; this.textContent = '숨김'; } else { p.type = 'password'; this.textContent = '표시'; }
+        });
+
+        $('loginBtn').addEventListener('click', async function () {
+          var username = $('username').value.trim(); var password = $('password').value;
+          if (!username || !password) { hb.toast.error('아이디와 비밀번호를 입력하세요.'); return; }
+          hb.showSpinner();
+          if (!(await ensureServer(6000))) { hb.hideSpinner(); hb.toast.error('도우미 서버 미응답 — 설정 창을 닫았다 다시 열어주세요.'); return; }
+          var res;
+          try { res = await reqT('/login', { username: username, password: password, country: (loadCache() || {}).country }, 30000); }
+          catch (e) { hb.hideSpinner(); hb.toast.error(e.message || '요청 실패'); return; }
+          hb.hideSpinner();
+          if (!res || !res.ok) { hb.toast.error((res && res.message) || '로그인 실패'); return; }
+          if (res.status === '2fa') { showTicket(res.notificationUrl); hb.toast.info('2단계 인증이 필요합니다.'); } else { onSaved(res); }
+        });
+
+        $('ticketBtn').addEventListener('click', async function () {
+          var ticket = $('ticket').value.trim();
+          if (!ticket) { hb.toast.error('인증코드를 입력하세요.'); return; }
+          hb.showSpinner(); var res;
+          try { res = await reqT('/submitTicket', { ticket: ticket }, 30000); }
+          catch (e) { hb.hideSpinner(); hb.toast.error(e.message || '요청 실패'); return; }
+          hb.hideSpinner();
+          if (!res || !res.ok) { hb.toast.error((res && res.message) || '인증 실패'); return; }
+          $('ticket').value = ''; onSaved(res);
+        });
+
+        $('cancelBtn').addEventListener('click', showLogin);
+
+        $('clearBtn').addEventListener('click', async function () {
+          hb.showSpinner();
+          if (!(await ensureServer(6000))) { hb.hideSpinner(); hb.toast.error('도우미 서버 미응답 — 설정 창을 닫았다 다시 열어주세요.'); return; }
+          try { await reqT('/clear', undefined, 10000); saveCache({ exists: false }); hb.toast.success('세션을 삭제했습니다.'); applySession({ exists: false }, null); }
+          catch (e) { hb.toast.error(e.message || '삭제 실패'); }
+          hb.hideSpinner();
+        });
+
+        function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+        function renderDevices(devices) {
+          if (!devices || !devices.length) { $('devTableWrap').innerHTML = '<div class="km81-muted">기기를 찾지 못했습니다.</div>'; return; }
+          var h = '<table class="km81-dev"><thead><tr><th>이름</th><th>모델</th><th>Device ID</th><th>IP</th><th>토큰</th><th>서버</th></tr></thead><tbody>';
+          for (var i = 0; i < devices.length; i++) {
+            var d = devices[i];
+            h += '<tr><td>' + esc(d.name) + (d.online ? '' : ' <span class="km81-muted">(오프라인)</span>') + '</td>'
+              + '<td>' + esc(d.model) + '</td><td><code>' + esc(d.did) + '</code></td><td><code>' + esc(d.ip) + '</code></td>'
+              + '<td><code>' + esc(d.token) + '</code> <button class="btn btn-link btn-sm km81-copy" data-v="' + esc(d.token) + '">복사</button></td>'
+              + '<td><span class="km81-chip">' + esc(d.country) + '</span></td></tr>';
+          }
+          h += '</tbody></table>'; $('devTableWrap').innerHTML = h;
+        }
+
+        $('scanBtn').addEventListener('click', async function () {
+          $('scanErrors').textContent = ''; hb.showSpinner();
+          if (!(await ensureServer(6000))) { hb.hideSpinner(); hb.toast.error('도우미 서버 미응답 — 설정 창을 닫았다 다시 열어주세요.'); return; }
+          $('scanHint').textContent = '여러 지역 조회 중… (수십 초)';
+          var res;
+          try { res = await reqT('/devices', undefined, 90000); }
+          catch (e) { hb.hideSpinner(); $('scanHint').textContent = ''; hb.toast.error(e.message || '요청 실패'); return; }
+          hb.hideSpinner(); $('scanHint').textContent = '';
+          if (!res || !res.ok) { hb.toast.error((res && res.message) || '기기 조회 실패'); return; }
+          renderDevices(res.devices);
+          $('scanSummary').textContent = (res.devices ? res.devices.length : 0) + '개 발견';
+          if (res.errors && res.errors.length) $('scanErrors').textContent = '일부 지역 조회 실패: ' + res.errors.join(' · ');
+          hb.toast.success((res.devices ? res.devices.length : 0) + '개 기기를 찾았습니다.');
+        });
+
+        $('devTableWrap').addEventListener('click', function (ev) {
+          var b = ev.target.closest && ev.target.closest('.km81-copy'); if (!b) return;
+          var v = b.getAttribute('data-v') || '';
+          if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(v).then(function () { hb.toast.success('토큰을 복사했습니다.'); }).catch(function () { hb.toast.info(v); }); }
+          else { hb.toast.info(v); }
+        });
+      }
+
+      var schemaShown = false;
+      function tryShowForm() { if (schemaShown) return; try { hb.showSchemaForm(); schemaShown = true; } catch (e) { } }
+
+      function init() {
+        tryShowForm();
+        if (init._done) return; init._done = true;
+        try { wire(); } catch (e) { }
+        showFromCache();   // 서버 접속 없이 즉시 표시. 서버는 버튼을 눌러 실제로 변경할 때만 접속.
+      }
+
+      try { if (hb && typeof hb.addEventListener === 'function') hb.addEventListener('ready', init); } catch (e) { }
+      setTimeout(init, 300);
+      setTimeout(tryShowForm, 1500);
+      setTimeout(tryShowForm, 3500);
+    })();
+  </script>
+</body>
+</html>
