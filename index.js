@@ -182,7 +182,7 @@ class XiaomiKm81Platform {
       } else if (hasCreds) {
         miCloud.login(mc.username, mc.password)
           .then(() => {
-            this.log.info('[XiaomiKm81] MiCloud 로그인 성공');
+            this.log.info('[XiaomiKm81] MiCloud 로그인됨');
             if (sessionFile) {
               try {
                 fs.writeFileSync(sessionFile, JSON.stringify({ country: miCloud.country, session: miCloud.getServiceToken() }, null, 2) + '\n');
