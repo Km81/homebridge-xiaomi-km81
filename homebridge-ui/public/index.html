@@ -106,6 +106,33 @@
     </div>
   </div>
 
+  <!-- ========== 패널 3: 자동 재로그인 자격증명 ========== -->
+  <div class="km81-card">
+    <div class="km81-head" data-target="body3"><span class="km81-chev">▸</span><span class="km81-title">자동 재로그인 (자격증명 저장)</span><span id="credSummary" class="km81-summary">—</span></div>
+    <div id="body3" class="km81-body km81-collapsed">
+      <p class="km81-sub">
+        세션이 만료돼도 <b>수동 로그인 없이</b> 플러그인이 스스로 다시 로그인하도록 Mi 계정·비밀번호를 <b>config에 저장</b>합니다.
+        <br>⚠️ 비밀번호가 Homebridge <code>config.json</code>에 <b>평문 저장</b>됩니다(설정 백업에도 포함). 감수할 때만 사용하세요.
+      </p>
+      <div class="km81-row">
+        <label>Mi 계정 (이메일/아이디)</label>
+        <input id="credUser" type="text" class="form-control" autocomplete="off">
+      </div>
+      <div class="km81-row">
+        <label>Mi 비밀번호</label>
+        <div class="km81-pw-wrap">
+          <input id="credPass" type="password" class="form-control" autocomplete="off">
+          <button type="button" id="credPwToggle" class="km81-pw-toggle">표시</button>
+        </div>
+      </div>
+      <div class="km81-actions">
+        <button id="credSaveBtn" class="btn btn-primary">config에 저장</button>
+        <button id="credClearBtn" class="btn btn-link btn-sm km81-hidden" style="color:#b02a37;">저장된 자격증명 삭제</button>
+      </div>
+      <div id="credStatus" class="km81-status wait" style="margin-top:8px;">불러오는 중…</div>
+    </div>
+  </div>
+
   <script>
     (function () {
       var hb = window.homebridge;
@@ -194,6 +221,62 @@
         if (s) { applySession({ exists: true, country: s.country, userId: s.userId, timestamp: s.timestamp }, null); saveCache({ exists: true, country: s.country, userId: s.userId, timestamp: s.timestamp }); }
       }
 
+      // ===== 자동 재로그인 자격증명 (config.micloud 에 영구 저장) =====
+      function setCredStatus(cls, text) { var b = $('credStatus'); if (b) { b.className = 'km81-status ' + cls; b.textContent = text; } }
+      function _xiaomiBlock(arr) {
+        arr = arr || [];
+        var b = arr.find(function (c) { return c && c.platform === 'XiaomiKm81'; });
+        return b || arr[0] || null;
+      }
+      async function loadCreds() {
+        try {
+          var arr = await hb.getPluginConfig();
+          var block = _xiaomiBlock(arr) || {};
+          var mc = block.micloud || {};
+          if ($('credUser')) $('credUser').value = mc.username || '';
+          if ($('credPass')) $('credPass').value = mc.password || '';
+          var has = !!(mc.username && mc.password);
+          setCredStatus(has ? 'ok' : 'none', has ? '자격증명 저장됨 ✓ — 세션 만료 시 자동 재로그인' : '저장된 자격증명 없음 — 만료 시 수동 로그인 필요');
+          if (has) show('credClearBtn'); else hide('credClearBtn');
+          if ($('credSummary')) { $('credSummary').className = 'km81-summary' + (has ? ' ok' : ' none'); $('credSummary').textContent = has ? '✓ 저장됨' : '미설정'; }
+        } catch (e) { setCredStatus('none', '설정을 불러오지 못했습니다: ' + (e.message || e)); }
+      }
+      async function saveCreds() {
+        var u = $('credUser').value.trim(); var p = $('credPass').value;
+        if (!u || !p) { hb.toast.error('아이디와 비밀번호를 입력하세요.'); return; }
+        hb.showSpinner();
+        try {
+          var arr = await hb.getPluginConfig();
+          if (!arr || !arr.length) arr = [{ platform: 'XiaomiKm81' }];
+          var block = _xiaomiBlock(arr);
+          if (!block) { block = { platform: 'XiaomiKm81' }; arr.push(block); }
+          block.micloud = block.micloud || {};
+          block.micloud.username = u;
+          block.micloud.password = p;
+          await hb.updatePluginConfig(arr);
+          await hb.savePluginConfig();
+          hb.hideSpinner();
+          hb.toast.success('자격증명을 config에 저장했습니다. Homebridge 재시작 후 자동 재로그인이 동작합니다.', '완료');
+          setCredStatus('ok', '자격증명 저장됨 ✓ — 세션 만료 시 자동 재로그인');
+          show('credClearBtn');
+          if ($('credSummary')) { $('credSummary').className = 'km81-summary ok'; $('credSummary').textContent = '✓ 저장됨'; }
+        } catch (e) { hb.hideSpinner(); hb.toast.error('저장 실패: ' + (e.message || e)); }
+      }
+      async function clearCreds() {
+        hb.showSpinner();
+        try {
+          var arr = await hb.getPluginConfig();
+          var block = _xiaomiBlock(arr);
+          if (block && block.micloud) { delete block.micloud.username; delete block.micloud.password; await hb.updatePluginConfig(arr); await hb.savePluginConfig(); }
+          hb.hideSpinner();
+          if ($('credUser')) $('credUser').value = ''; if ($('credPass')) $('credPass').value = '';
+          hb.toast.success('저장된 자격증명을 삭제했습니다.');
+          setCredStatus('none', '저장된 자격증명 없음 — 만료 시 수동 로그인 필요');
+          hide('credClearBtn');
+          if ($('credSummary')) { $('credSummary').className = 'km81-summary none'; $('credSummary').textContent = '미설정'; }
+        } catch (e) { hb.hideSpinner(); hb.toast.error('삭제 실패: ' + (e.message || e)); }
+      }
+
       function bindCollapse() {
         var heads = document.querySelectorAll('.km81-head');
         for (var i = 0; i < heads.length; i++) {
@@ -219,6 +302,14 @@
           var p = $('password');
           if (p.type === 'password') { p.type = 'text'; this.textContent = '숨김'; } else { p.type = 'password'; this.textContent = '표시'; }
         });
+
+        // 자동 재로그인 자격증명 패널
+        $('credPwToggle').addEventListener('click', function () {
+          var p = $('credPass');
+          if (p.type === 'password') { p.type = 'text'; this.textContent = '숨김'; } else { p.type = 'password'; this.textContent = '표시'; }
+        });
+        $('credSaveBtn').addEventListener('click', saveCreds);
+        $('credClearBtn').addEventListener('click', clearCreds);
 
         $('loginBtn').addEventListener('click', async function () {
           var username = $('username').value.trim(); var password = $('password').value;
@@ -299,6 +390,7 @@
         if (init._done) return; init._done = true;
         try { wire(); } catch (e) { }
         showFromCache();   // 서버 접속 없이 즉시 표시. 서버는 버튼을 눌러 실제로 변경할 때만 접속.
+        try { loadCreds(); } catch (e) { }   // config에 저장된 자동 재로그인 자격증명 표시(서버 불필요)
       }
 
       try { if (hb && typeof hb.addEventListener === 'function') hb.addEventListener('ready', init); } catch (e) { }
