@@ -177,8 +177,23 @@ class XiaomiKm81Platform {
       else if (cached && cached.session) miCloud.setServiceToken(cached.session);
       this.miCloud = miCloud;
 
+      // v2.2.0 — 자동 재로그인: config에 자격증명이 있으면 세션 만료(401/403/426) 시
+      // 검증된 deviceId(setServiceToken이 복원한 AGENT_ID/CLIENT_ID)로 조용히 재로그인.
+      // 갱신된 세션은 캐시 파일에 즉시 저장(재시작에도 유지).
+      if (hasCreds) {
+        miCloud.username = mc.username;
+        miCloud.password = mc.password;
+        miCloud.onSessionRefreshed = (tokenJson) => {
+          if (!sessionFile || !tokenJson) return;
+          try {
+            fs.writeFileSync(sessionFile, JSON.stringify({ country: miCloud.country, session: tokenJson }, null, 2) + '\n');
+            this.log.info('[XiaomiKm81] 갱신된 MiCloud 세션을 캐시에 저장했습니다');
+          } catch (_) { /* 저장 실패해도 메모리 세션으로 계속 동작 */ }
+        };
+      }
+
       if (miCloud.isLoggedIn()) {
-        this.log.info('[XiaomiKm81] MiCloud 캐시 세션 사용 중');
+        this.log.info(`[XiaomiKm81] MiCloud 캐시 세션 사용 중${hasCreds ? ' (만료 시 자동 재로그인)' : ''}`);
       } else if (hasCreds) {
         miCloud.login(mc.username, mc.password)
           .then(() => {
