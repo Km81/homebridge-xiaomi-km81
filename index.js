@@ -168,8 +168,18 @@ class XiaomiKm81Platform {
         debug: (...a) => this.log.debug('[MiCloud]', ...a),
         deepDebug: (...a) => { if (mc && mc.debug) this.log.debug('[MiCloud]', ...a); },
         info: (...a) => this.log.info('[MiCloud]', ...a),
+        warn: (...a) => this.log.warn('[MiCloud]', ...a),   // 재로그인 실패·인증코드 요구 등 경고 (v2.2.1)
       };
       const miCloud = new MiCloud(logger);
+      // 세션 파일 원자적 저장(tmp→rename) — 쓰다 죽으면 검증된 deviceId의 유일 사본이 오염돼
+      // 다음 부팅이 랜덤 deviceId 로그인(=인증코드 회귀)으로 미끄러지는 체인 차단 (v2.2.1)
+      const saveSessionFile = (tokenJson) => {
+        if (!sessionFile || !tokenJson) return false;
+        const tmp = sessionFile + '.tmp';
+        fs.writeFileSync(tmp, JSON.stringify({ country: miCloud.country, session: tokenJson }, null, 2) + '\n', { mode: 0o600 });
+        fs.renameSync(tmp, sessionFile);
+        return true;
+      };
       const country = (cfgToken && mc && mc.country) || (cached && cached.country) || (mc && mc.country) || 'cn';
       miCloud.setCountry(String(country).toLowerCase());
       // 우선순위: config serviceToken > 캐시 파일 세션
@@ -184,10 +194,8 @@ class XiaomiKm81Platform {
         miCloud.username = mc.username;
         miCloud.password = mc.password;
         miCloud.onSessionRefreshed = (tokenJson) => {
-          if (!sessionFile || !tokenJson) return;
           try {
-            fs.writeFileSync(sessionFile, JSON.stringify({ country: miCloud.country, session: tokenJson }, null, 2) + '\n');
-            this.log.info('[XiaomiKm81] 갱신된 MiCloud 세션을 캐시에 저장했습니다');
+            if (saveSessionFile(tokenJson)) this.log.info('[XiaomiKm81] 갱신된 MiCloud 세션을 캐시에 저장했습니다');
           } catch (_) { /* 저장 실패해도 메모리 세션으로 계속 동작 */ }
         };
       }
@@ -198,12 +206,9 @@ class XiaomiKm81Platform {
         miCloud.login(mc.username, mc.password)
           .then(() => {
             this.log.info('[XiaomiKm81] MiCloud 로그인됨');
-            if (sessionFile) {
-              try {
-                fs.writeFileSync(sessionFile, JSON.stringify({ country: miCloud.country, session: miCloud.getServiceToken() }, null, 2) + '\n');
-                this.log.info('[XiaomiKm81] MiCloud 세션을 캐시에 저장했습니다');
-              } catch (_) {}
-            }
+            try {
+              if (saveSessionFile(miCloud.getServiceToken())) this.log.info('[XiaomiKm81] MiCloud 세션을 캐시에 저장했습니다');
+            } catch (_) {}
           })
           .catch(err => {
             if (err && err.notificationUrl) {

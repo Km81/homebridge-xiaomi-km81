@@ -113,6 +113,7 @@
       <p class="km81-sub">
         세션이 만료돼도 <b>수동 로그인 없이</b> 플러그인이 스스로 다시 로그인하도록 Mi 계정·비밀번호를 <b>config에 저장</b>합니다.
         <br>⚠️ 비밀번호가 Homebridge <code>config.json</code>에 <b>평문 저장</b>됩니다(설정 백업에도 포함). 감수할 때만 사용하세요.
+        <br>⚠️ 저장 시 검증하지 않으니 <b>위 '계정 로그인' 패널에서 성공한 계정과 똑같이</b> 입력하세요 — 오타면 만료 시점에 재로그인이 반복 실패합니다(연속 3회 실패 시 6시간 대기 후 재시도, 로그로 안내됨).
       </p>
       <div class="km81-row">
         <label>Mi 계정 (이메일/아이디)</label>
@@ -338,6 +339,8 @@
         $('cancelBtn').addEventListener('click', showLogin);
 
         $('clearBtn').addEventListener('click', async function () {
+          // v2.2.1 — 세션 파일엔 "인증 코드 면제"의 열쇠인 검증된 기기번호가 들어 있음 — 실수 삭제 방지
+          if (!window.confirm('세션을 삭제하면 다음 로그인에서 샤오미가 인증 코드를 다시 요구할 수 있습니다.\n(검증된 기기번호가 세션에 저장돼 있음 — 서버에 .deleted.bak 백업은 남습니다)\n정말 삭제할까요?')) return;
           hb.showSpinner();
           if (!(await ensureServer(6000))) { hb.hideSpinner(); hb.toast.error('도우미 서버 미응답 — 설정 창을 닫았다 다시 열어주세요.'); return; }
           try { await reqT('/clear', undefined, 10000); saveCache({ exists: false }); hb.toast.success('세션을 삭제했습니다.'); applySession({ exists: false }, null); }

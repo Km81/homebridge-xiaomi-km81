@@ -63,7 +63,10 @@ class UiServer extends HomebridgePluginUiServer {
     const p = this._sessionPath();
     if (!p) throw new Error('세션을 저장할 storage 경로를 확인할 수 없습니다.');
     const data = { country: miCloud.country, session };
-    fs.writeFileSync(p, JSON.stringify(data, null, 2) + '\n');
+    // v2.2.1 — 원자적 저장(tmp→rename) + 0600: 검증된 deviceId의 유일 사본 오염/노출 방지
+    const tmp = p + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(data, null, 2) + '\n', { mode: 0o600 });
+    fs.renameSync(tmp, p);
     return data;
   }
 
@@ -186,7 +189,9 @@ class UiServer extends HomebridgePluginUiServer {
   async handleClear() {
     const p = this._sessionPath();
     try {
-      if (p && fs.existsSync(p)) fs.unlinkSync(p);
+      // v2.2.1 — 삭제 대신 백업으로 보존: 세션 파일 안의 검증된 deviceId(agentId/clientId)는
+      // "인증 코드 없는 재로그인"의 유일한 열쇠라 완전 삭제하면 다음 로그인이 인증 코드를 요구할 수 있음.
+      if (p && fs.existsSync(p)) fs.renameSync(p, p + '.deleted.bak');
     } catch (e) {
       return { ok: false, message: '세션 파일 삭제 실패: ' + (e.message || e) };
     }
