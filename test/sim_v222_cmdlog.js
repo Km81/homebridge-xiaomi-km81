@@ -61,8 +61,12 @@ check('[A] miot mode 라벨 없으면 null / 있으면 표기', () => {
 check('[A] miot delay_enabled → null (한 동작 두 줄 방지)', () => assert.strictEqual(fmtMiot('delay_enabled', true), null));
 check('[A] miot move_left → 이동 → 왼쪽', () => assert.strictEqual(fmtMiot('move_left', true), '이동 → 왼쪽'));
 
-check('[A] purifier set_mode favorite → 모드 → 즐겨찾기', () => assert.strictEqual(fmtPurifier('set_mode', ['favorite']), '모드 → 즐겨찾기'));
-check('[A] purifier set_level_favorite 12 → 즐겨찾기 단계 → 12/16', () => assert.strictEqual(fmtPurifier('set_level_favorite', [12]), '즐겨찾기 단계 → 12/16'));
+check('[A] purifier 모드 번역 3종 — 자동/취침/수동 (2026-07-30 사용자 확정)', () => {
+  assert.strictEqual(fmtPurifier('set_mode', ['auto']), '모드 → 자동');
+  assert.strictEqual(fmtPurifier('set_mode', ['silent']), '모드 → 취침');
+  assert.strictEqual(fmtPurifier('set_mode', ['favorite']), '모드 → 수동');
+});
+check('[A] purifier set_level_favorite 12 → 수동 풍량 → 12/16단계', () => assert.strictEqual(fmtPurifier('set_level_favorite', [12]), '수동 풍량 → 12/16단계'));
 check('[A] purifier set_power on → 전원 → 켜짐', () => assert.strictEqual(fmtPurifier('set_power', ['on']), '전원 → 켜짐'));
 check('[A] purifier get_prop → null (폴링 침묵)', () => assert.strictEqual(fmtPurifier('get_prop', [['power']]), null));
 
