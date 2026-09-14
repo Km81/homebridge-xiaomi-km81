@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * put_away.js — 「치워 둠(putAway)」 토글 회귀 (v2.3.0, 2026-09-14)
+ * put_away.js — 「임시 연결해제(putAway)」 토글 회귀 (v2.3.1, 2026-09-14)
  *
  * 왜 이 회귀가 있나:
  *   이 기능의 목적은 **로그를 안 내는 것**이다. 그런데 로그 문구는 NAS 감시기(hb_watch)의
@@ -77,7 +77,7 @@ function check(name, fn) {
   catch (e) { failed++; console.log(`  FAIL ${name}\n       ${e && e.message}`); }
 }
 
-console.log('put_away — 치워 둠 토글 회귀');
+console.log('put_away — 임시 연결해제 토글 회귀');
 
 /* ---- 1. 설정 해석 ---- */
 check('putAway 는 불리언 true 에만 켜진다', () => {
@@ -108,7 +108,7 @@ check('PUT_AWAY_MESSAGE 에 감시 어휘가 하나도 없다', () => {
   assert.deepStrictEqual(hits, [], `문구에 감시 어휘가 섞였다:\n${hits.join('\n')}`);
 });
 
-/* ---- 3. 치워 둔 기기는 통신을 시작하지 않는다 ---- */
+/* ---- 3. 임시 연결해제한 기기는 통신을 시작하지 않는다 ---- */
 check('putAway=true 면 연결을 한 번도 열지 않는다', () => {
   const log = makeLog();
   const fc = newController(log);

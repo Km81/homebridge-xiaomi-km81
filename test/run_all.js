@@ -12,7 +12,7 @@ const { spawnSync } = require('child_process');
 const path = require('path');
 
 const SUITES = [
-  'put_away.js',        // 치워 둠 토글 (v2.3.0)
+  'put_away.js',        // 임시 연결해제 토글 (v2.3.0)
   'sim_v222_cmdlog.js', // 명령 로그 문구 (v2.2.2)
 ];
 
