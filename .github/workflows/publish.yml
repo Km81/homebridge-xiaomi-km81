@@ -50,6 +50,9 @@ jobs:
           node -e "JSON.parse(require('fs').readFileSync('config.schema.json','utf8'))"
           echo "All syntax checks passed."
 
+      - name: Run regression suites
+        run: npm test
+
       - name: Verify package version matches tag
         if: startsWith(github.ref, 'refs/tags/v')
         run: |

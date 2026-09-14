@@ -58,6 +58,12 @@
             },
 
             "name":  { "title": "이름", "type": "string", "description": "HomeKit에 표시될 액세서리 이름" },
+            "putAway": {
+              "title": "치워 둠 (이 기기와 통신하지 않음)",
+              "type": "boolean",
+              "default": false,
+              "description": "보관 중이거나 전원을 뽑아 둔 기기에 체크하세요. 체크하면 이 기기에 대한 조회·재연결을 하지 않고, 연결이 끊겼다는 기록도 남기지 않습니다(따라서 연결 이상 알림도 오지 않습니다). 홈 앱의 타일·방 배치·장면은 그대로 유지되며, 상태만 기본값으로 보입니다. 다시 쓸 때 체크를 해제하세요. 변경은 홈브릿지를 재시작해야 적용됩니다."
+            },
             "ip":    { "title": "IP 주소", "type": "string", "format": "ipv4" },
             "token": { "title": "토큰", "type": "string", "pattern": "^[A-Fa-f0-9]{32}$", "description": "32자리 hex 토큰" },
             "deviceId": { "title": "Device ID (선택)", "type": "string", "description": "miot 신형 디바이스 (선풍기 / 공기측정기 / 가습기) 에서 사용. 보통 자동 감지됨. 선풍기 클라우드/하이브리드 사용 시에는 필수(레거시 Smartmi 포함)." },
@@ -214,6 +220,7 @@
         "devices[].deviceType",
 
         "devices[].name",
+        "devices[].putAway",
         "devices[].ip",
         "devices[].token",
 
