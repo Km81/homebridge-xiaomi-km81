@@ -20,7 +20,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
-const { isPutAway, PUT_AWAY_MESSAGE } = require('../lib/common/putAway.js');
+const { isPutAway, PUT_AWAY_MESSAGE, sealForPutAway } = require('../lib/common/putAway.js');
 const FanController = require('../lib/fan/FanController.js');
 
 /**
@@ -212,6 +212,146 @@ check('config.schema.json 에 putAway 가 있고 장치 탭에 노출된다', ()
   // ⚠️조건부 표시로 감싸면 특정 장치 종류에서 사라진다 — 5종 전부에 필요하다
   const entry = tab.items.find(x => x && x.key === 'devices[].putAway');
   assert.ok(entry === undefined, 'putAway 에 표시 조건이 붙었다 — 모든 장치 종류에서 보여야 한다');
+});
+
+const SRC = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+
+/* ── ⑧ ★홈킷 타일은 「정상 연결 + 마지막 상태」여야 한다 (v2.4.0 / v2.16.0) ──────────
+   Km81 님 지시: 「정상연결로 최종 상태를 가져왔으면 해」.
+   그 전에는 선풍기 = 정상 연결 + 기본값, 에어컨 = **응답 없음** 으로 갈렸다.
+
+   ⚠️아래 가짜 특성은 hap-nodejs 2.2.2 를 **직접 실행해 관측한 규칙**을 그대로 모형화한다:
+     ① 게터가 없으면 현재 값으로 답한다
+     ② 게터가 한 번 던지면 `status` 가 눌러붙어 그 뒤로 계속 거부한다
+     ③ 그 `status` 는 대입으로는 안 지워지고 `updateValue()` 로만 지워진다
+   ⛔실제 hap 은 이 저장소의 의존 패키지가 아니다 — 그래서 규칙을 모형으로 고정한다.
+     모형이 실물과 어긋나면 이 회귀는 거짓 안심이 된다(관측 근거는 HANDOFF 에 적었다). */
+function mkChar(value) {
+  return {
+    value,
+    status: null,
+    getHandler: null,
+    setHandler: null,
+    onGet(fn) { this.getHandler = fn; return this; },
+    onSet(fn) { this.setHandler = fn; return this; },
+    removeOnGet() { this.getHandler = null; return this; },
+    removeOnSet() { this.setHandler = null; return this; },
+    updateValue(v) { this.value = v; this.status = null; return this; },   // ③
+    // hap 의 handleGetRequest 를 모형화
+    get_() {
+      if (this.getHandler) {
+        try { return this.getHandler(); }
+        catch (e) { this.status = -70402; throw e; }                        // ②
+      }
+      if (this.status) throw this.status;                                   // ② 눌러붙음
+      return this.value;                                                   // ①
+    },
+  };
+}
+
+function mkAcc(vals) {
+  const chars = vals.map(mkChar);
+  return { services: [{ characteristics: chars }], chars };
+}
+
+check('[모형] 게터가 던지면 「응답 없음」이 된다 — 고치려는 증상 자체', () => {
+  const a = mkAcc([1]);
+  a.chars[0].onGet(() => { throw new Error('통신 실패'); });
+  assert.throws(() => a.chars[0].get_(), /통신 실패/);
+  assert.strictEqual(a.chars[0].status, -70402, 'status 가 눌러붙지 않았다 — 모형이 틀렸다');
+});
+
+check('★sealForPutAway 뒤에는 마지막 값으로 답한다', () => {
+  const a = mkAcc([1, 26, 24]);
+  a.chars.forEach((c) => c.onGet(() => { throw new Error('통신 실패'); }));
+  try { a.chars[0].get_(); } catch (e) { /* 눌러붙게 만든다 */ }
+  const n = sealForPutAway(a);
+  assert.strictEqual(n, 3, `봉한 특성 수가 ${n} 이다`);
+  assert.deepStrictEqual(a.chars.map((c) => c.get_()), [1, 26, 24],
+    '마지막 상태로 답하지 않는다 — 홈 앱에 「응답 없음」이 남는다');
+});
+
+check('★sealForPutAway 는 눌러붙은 status 도 지운다', () => {
+  const a = mkAcc([1]);
+  a.chars[0].onGet(() => { throw new Error('x'); });
+  try { a.chars[0].get_(); } catch (e) { /* noop */ }
+  assert.strictEqual(a.chars[0].status, -70402);
+  sealForPutAway(a);
+  assert.strictEqual(a.chars[0].status, null, 'status 가 남아 있다 — 계속 거부된다');
+});
+
+check('★쓰기 핸들러도 떼어 낸다 (탭이 통신을 만들지 않는다)', () => {
+  const a = mkAcc([0]);
+  let sent = 0;
+  a.chars[0].onSet(() => { sent += 1; });
+  sealForPutAway(a);
+  assert.strictEqual(a.chars[0].setHandler, null, 'onSet 이 남아 있다');
+  assert.strictEqual(sent, 0);
+});
+
+check('⛔값이 없는 특성은 건드리지 않는다 (hap 이 경고를 낸다)', () => {
+  const a = mkAcc([null]);
+  let touched = 0;
+  a.chars[0].updateValue = () => { touched += 1; };
+  sealForPutAway(a);
+  assert.strictEqual(touched, 0, 'value 가 null 인데 updateValue 를 불렀다');
+});
+
+check('⛔한 특성이 실패해도 나머지를 계속 봉한다', () => {
+  const a = mkAcc([1, 1]);
+  a.chars[0].removeOnGet = () => { throw new Error('깨진 특성'); };
+  a.chars[1].onGet(() => { throw new Error('x'); });
+  assert.doesNotThrow(() => sealForPutAway(a));
+  assert.strictEqual(a.chars[1].getHandler, null, '뒤 특성이 안 봉해졌다');
+});
+
+check('⛔액세서리가 없거나 서비스가 없어도 던지지 않는다', () => {
+  assert.strictEqual(sealForPutAway(null), 0);
+  assert.strictEqual(sealForPutAway({}), 0);
+  assert.strictEqual(sealForPutAway({ services: [{}] }), 0);
+});
+
+/* ── ⑨ 구조 회귀 — 게이트가 seal 을 부르는가 ──── */
+check('AirPurifierAccessory.js — 게이트가 sealForPutAway 를 부른다', () => {
+  const s = SRC('lib/airpurifier/AirPurifierAccessory.js');
+  const g = s.indexOf('isPutAway(');
+  const k = s.indexOf('sealForPutAway(', g);
+  const c = s.indexOf('this.connectWithRetry()');
+  assert.ok(k !== -1, 'seal 호출이 없다 — 타일이 「응답 없음」이 된다');
+  assert.ok(g < k && k < c, `위치가 틀렸다 (gate=${g}, seal=${k}, comm=${c})`);
+});
+check('PowerStripAccessory.js — 게이트가 sealForPutAway 를 부른다', () => {
+  const s = SRC('lib/powerstrip/PowerStripAccessory.js');
+  const g = s.indexOf('isPutAway(');
+  const k = s.indexOf('sealForPutAway(', g);
+  const c = s.indexOf('this.connect();');
+  assert.ok(k !== -1, 'seal 호출이 없다 — 타일이 「응답 없음」이 된다');
+  assert.ok(g < k && k < c, `위치가 틀렸다 (gate=${g}, seal=${k}, comm=${c})`);
+});
+check('HumidifierAccessory.js — 게이트가 sealForPutAway 를 부른다', () => {
+  const s = SRC('lib/humidifier/HumidifierAccessory.js');
+  const g = s.indexOf('isPutAway(');
+  const k = s.indexOf('sealForPutAway(', g);
+  const c = s.indexOf('this.connect();');
+  assert.ok(k !== -1, 'seal 호출이 없다 — 타일이 「응답 없음」이 된다');
+  assert.ok(g < k && k < c, `위치가 틀렸다 (gate=${g}, seal=${k}, comm=${c})`);
+});
+check('AirMonitorAccessory.js — 게이트가 sealForPutAway 를 부른다', () => {
+  const s = SRC('lib/airmonitor/AirMonitorAccessory.js');
+  const g = s.indexOf('isPutAway(');
+  const k = s.indexOf('sealForPutAway(', g);
+  const c = s.indexOf('this.startPolling();');
+  assert.ok(k !== -1, 'seal 호출이 없다 — 타일이 「응답 없음」이 된다');
+  assert.ok(g < k && k < c, `위치가 틀렸다 (gate=${g}, seal=${k}, comm=${c})`);
+});
+
+check('FanAccessory.js — 서비스를 만든 뒤에 seal 한다', () => {
+  const s = SRC('lib/fan/FanAccessory.js');
+  const setup = s.indexOf('this.setupAccessoryServices();');
+  const seal = s.indexOf('sealForPutAway(');
+  assert.ok(setup !== -1 && seal !== -1, 'seal 호출이 없다');
+  assert.ok(setup < seal, 'seal 이 서뱄스 생성보다 앞이다 — 뗄 것이 없다');
+  assert.ok(/this\.putAway\)\s*sealForPutAway|putAway\) sealForPutAway/.test(s), 'putAway 조건 없이 항상 seal 한다');
 });
 
 console.log(`\nput_away: ${total - failed}/${total} 통과`);
