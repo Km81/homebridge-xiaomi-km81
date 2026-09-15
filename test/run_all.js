@@ -13,6 +13,7 @@ const path = require('path');
 
 const SUITES = [
   'put_away.js',        // 임시 연결해제 토글 (v2.3.0)
+  'put_away_hap.js',    // ★실제 hap-nodejs 로 5종 봉인·통신 0 (v2.4.1 — hap 없으면 skip 이 아니라 실패)
   'sim_v222_cmdlog.js', // 명령 로그 문구 (v2.2.2)
 ];
 

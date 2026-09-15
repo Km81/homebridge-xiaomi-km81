@@ -13,6 +13,10 @@
  *   실행되지 않아도 참이 된다(잘 도는데 0건). 그래서 putAway 를 끈 같은 컨트롤러가
  *   **실제로 연결을 시도하는지**를 같이 잰다. 대조군이 실패하면 이 스위트 전체가 무의미하다.
  *
+ * ⛔★★2.4.0 의 이 스위트는 초록인데 구멍이 셋 있었다(2026-09-15 적대 리뷰 변이 시험) —
+ *   선풍기 배선 · 게이트 `&& false`/`return` 삭제 · 주석화된 게이트. 모두 통과했다.
+ *   ⇒ 구조 검사는 주석을 벗기고 재고, **실제 hap 으로 5종 생성자를 돌리는 시험**을 `put_away_hap.js` 에 두었다.
+ *
  * 실행: node test/put_away.js   (의존 패키지가 필요하다 — miio)
  */
 
@@ -20,7 +24,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 
-const { isPutAway, PUT_AWAY_MESSAGE, sealForPutAway } = require('../lib/common/putAway.js');
+const { isPutAway, PUT_AWAY_MESSAGE, PUT_AWAY_SEAL_EMPTY, sealForPutAway } = require('../lib/common/putAway.js');
 const FanController = require('../lib/fan/FanController.js');
 
 /**
@@ -214,51 +218,118 @@ check('config.schema.json 에 putAway 가 있고 장치 탭에 노출된다', ()
   assert.ok(entry === undefined, 'putAway 에 표시 조건이 붙었다 — 모든 장치 종류에서 보여야 한다');
 });
 
-const SRC = (rel) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
+/**
+ * ★주석을 벗긴 소스(v2.4.1). 2.4.0 은 원문을 그대로 `indexOf` 해서, 게이트를 주석으로 바꿔도
+ *   주석 안의 글자를 찾아 **통과**했다(2026-09-15 리뷰 C 변이 실측). 문자열 안의 `//` 는 지키고,
+ *   주석은 같은 길이의 공백으로 바꾼다(위치 비교가 흔들리지 않게).
+ */
+function stripComments(src) {
+  let out = '';
+  let i = 0;
+  let q = null;
+  while (i < src.length) {
+    const c = src[i], n = src[i + 1];
+    if (q) {
+      out += c;
+      if (c === '\\') { out += n || ''; i += 2; continue; }
+      if (c === q) q = null;
+      i += 1; continue;
+    }
+    if (c === '/' && n === '/') {
+      while (i < src.length && src[i] !== '\n') { out += ' '; i += 1; }
+      continue;
+    }
+    if (c === '/' && n === '*') {
+      const end = src.indexOf('*/', i + 2);
+      const stop = end === -1 ? src.length : end + 2;
+      for (; i < stop; i++) out += src[i] === '\n' ? '\n' : ' ';
+      continue;
+    }
+    if (c === '\'' || c === '"' || c === '`') q = c;
+    out += c; i += 1;
+  }
+  return out;
+}
+const SRC = (rel) => stripComments(fs.readFileSync(path.join(__dirname, '..', rel), 'utf8'));
 
-/* ── ⑧ ★홈킷 타일은 「정상 연결 + 마지막 상태」여야 한다 (v2.4.0 / v2.16.0) ──────────
+check('[계측기] stripComments — 주석으로 바꾼 게이트는 찾지 못한다', () => {
+  const dead = '// if (isPutAway(config)) {\n/* sealForPutAway(x) */\n  x();';
+  assert.strictEqual(stripComments(dead).indexOf('isPutAway('), -1, '주석 안의 코드를 코드로 읽었다 — 2.4.0 의 결함');
+  assert.strictEqual(stripComments(dead).indexOf('sealForPutAway('), -1);
+  const s = "const u = 'https://x.y'; // 꼬리";
+  assert.ok(stripComments(s).indexOf("'https://x.y'") !== -1, '문자열을 주석으로 오인했다');
+  assert.strictEqual(stripComments(s).length, s.length);
+});
+
+/* ---- 5-B. 게이트 블록이 실제로 끊는가 (주석 제거 후) ---- */
+for (const [rel, startCall] of GATED) {
+  check(`${path.basename(rel)} — 게이트가 살아 있고(주석·&& false 아님) return 한다`, () => {
+    const s = SRC(rel);
+    const g = s.indexOf('if (isPutAway(config)) {');
+    const c = s.indexOf(startCall);
+    assert.ok(g !== -1, '살아 있는 `if (isPutAway(config)) {` 가 없다 — 주석화되었거나 조건이 바뀌었다');
+    assert.ok(g < c, '게이트가 통신 시작보다 뒤에 있다');
+    const blk = s.slice(g, c);
+    assert.ok(/\breturn;/.test(blk), '게이트 안에 return 이 없다 — 공기측정기는 이러면 실제로 폴링한다');
+  });
+}
+
+/* ── ⑧ ★홈킷 타일은 「정상 연결 + 마지막 상태」여야 한다 ──────────
    Km81 님 지시: 「정상연결로 최종 상태를 가져왔으면 해」.
-   그 전에는 선풍기 = 정상 연결 + 기본값, 에어컨 = **응답 없음** 으로 갈렸다.
 
-   ⚠️아래 가짜 특성은 hap-nodejs 2.2.2 를 **직접 실행해 관측한 규칙**을 그대로 모형화한다:
-     ① 게터가 없으면 현재 값으로 답한다
-     ② 게터가 한 번 던지면 `status` 가 눌러붙어 그 뒤로 계속 거부한다
-     ③ 그 `status` 는 대입으로는 안 지워지고 `updateValue()` 로만 지워진다
-   ⛔실제 hap 은 이 저장소의 의존 패키지가 아니다 — 그래서 규칙을 모형으로 고정한다.
-     모형이 실물과 어긋나면 이 회귀는 거짓 안심이 된다(관측 근거는 HANDOFF 에 적었다). */
-function mkChar(value) {
+   ⚠️아래 가짜 특성은 hap-nodejs 2.2.2 `Characteristic.js` 의 규칙을 모형화한다:
+     ① 새 처리기(`getHandler`)가 있으면 그것을 부르고, 던지면 `statusCode` 를 남긴다
+     ② ⛔새 처리기가 없고 옛 `on('get')` 리스너가 있으면 그 리스너를 부른다(`removeOnGet` 은 리스너를 안 지운다)
+     ③ 둘 다 없으면 `statusCode` 가 남아 있으면 던지고, 아니면 현재 값으로 답한다
+     ④ 쓰기도 같다 — 새 처리기 → 옛 리스너 → (둘 다 없으면) 지역 값만 바꾼다
+     ⑤ `updateValue()` 는 `statusCode` 를 0 으로 되돌린다
+   ⛔모형은 모형이다 — 같은 규칙을 **실제 hap 으로** `put_away_hap.js` 가 5종 생성자째 다시 잰다. */
+function mkChar(value, perms = ['pr', 'pw', 'ev']) {
   return {
     value,
-    status: null,
-    getHandler: null,
-    setHandler: null,
+    statusCode: 0,
+    props: { perms },
+    getHandler: undefined,
+    setHandler: undefined,
+    _l: { get: [], set: [] },
     onGet(fn) { this.getHandler = fn; return this; },
     onSet(fn) { this.setHandler = fn; return this; },
-    removeOnGet() { this.getHandler = null; return this; },
-    removeOnSet() { this.setHandler = null; return this; },
-    updateValue(v) { this.value = v; this.status = null; return this; },   // ③
-    // hap 의 handleGetRequest 를 모형화
+    removeOnGet() { this.getHandler = undefined; return this; },
+    removeOnSet() { this.setHandler = undefined; return this; },
+    on(ev, fn) { this._l[ev].push(fn); return this; },
+    listenerCount(ev) { return (this._l[ev] || []).length; },
+    removeAllListeners(ev) { this._l[ev] = []; return this; },
+    updateValue(v) { this.value = v; this.statusCode = 0; return this; },
     get_() {
       if (this.getHandler) {
         try { return this.getHandler(); }
-        catch (e) { this.status = -70402; throw e; }                        // ②
+        catch (e) { this.statusCode = -70402; throw e; }
       }
-      if (this.status) throw this.status;                                   // ② 눌러붙음
-      return this.value;                                                   // ①
+      if (this._l.get.length) {
+        let out; this._l.get[0]((err, v) => { if (err) { this.statusCode = -70402; throw err; } out = v; });
+        return out;
+      }
+      if (this.statusCode) throw this.statusCode;
+      return this.value;
+    },
+    set_(v) {
+      if (this.setHandler) { this.setHandler(v); this.value = v; return; }
+      if (this._l.set.length) { this._l.set[0](v, () => {}); this.value = v; return; }
+      this.value = v;
     },
   };
 }
 
 function mkAcc(vals) {
-  const chars = vals.map(mkChar);
-  return { services: [{ characteristics: chars }], chars };
+  const chars = vals.map((v) => mkChar(v));
+  return { services: [{ UUID: 'X', characteristics: chars }], chars };
 }
 
 check('[모형] 게터가 던지면 「응답 없음」이 된다 — 고치려는 증상 자체', () => {
   const a = mkAcc([1]);
   a.chars[0].onGet(() => { throw new Error('통신 실패'); });
   assert.throws(() => a.chars[0].get_(), /통신 실패/);
-  assert.strictEqual(a.chars[0].status, -70402, 'status 가 눌러붙지 않았다 — 모형이 틀렸다');
+  assert.strictEqual(a.chars[0].statusCode, -70402, 'statusCode 가 남지 않았다 — 모형이 틀렸다');
 });
 
 check('★sealForPutAway 뒤에는 마지막 값으로 답한다', () => {
@@ -266,27 +337,35 @@ check('★sealForPutAway 뒤에는 마지막 값으로 답한다', () => {
   a.chars.forEach((c) => c.onGet(() => { throw new Error('통신 실패'); }));
   try { a.chars[0].get_(); } catch (e) { /* 눌러붙게 만든다 */ }
   const n = sealForPutAway(a);
-  assert.strictEqual(n, 3, `봉한 특성 수가 ${n} 이다`);
+  assert.strictEqual(n, 3, `떼어 낸 처리기 수가 ${n} 이다`);
   assert.deepStrictEqual(a.chars.map((c) => c.get_()), [1, 26, 24],
     '마지막 상태로 답하지 않는다 — 홈 앱에 「응답 없음」이 남는다');
 });
 
-check('★sealForPutAway 는 눌러붙은 status 도 지운다', () => {
+check('★sealForPutAway 는 옛 on(get/set) 리스너도 뗀다', () => {
+  const a = mkAcc([1]);
+  let sent = 0;
+  a.chars[0].on('get', () => { sent += 1; });
+  a.chars[0].on('set', () => { sent += 1; });
+  assert.strictEqual(sealForPutAway(a), 2);
+  assert.strictEqual(a.chars[0].get_(), 1);
+  a.chars[0].set_(0);
+  assert.strictEqual(sent, 0, `옛 리스너로 명령이 ${sent}회 나갔다`);
+});
+
+check('★sealForPutAway 는 눌러붙은 statusCode 도 지운다', () => {
   const a = mkAcc([1]);
   a.chars[0].onGet(() => { throw new Error('x'); });
   try { a.chars[0].get_(); } catch (e) { /* noop */ }
-  assert.strictEqual(a.chars[0].status, -70402);
+  assert.strictEqual(a.chars[0].statusCode, -70402);
   sealForPutAway(a);
-  assert.strictEqual(a.chars[0].status, null, 'status 가 남아 있다 — 계속 거부된다');
+  assert.strictEqual(a.chars[0].statusCode, 0, 'statusCode 가 남아 있다 — 계속 거부된다');
 });
 
-check('★쓰기 핸들러도 떼어 낸다 (탭이 통신을 만들지 않는다)', () => {
-  const a = mkAcc([0]);
-  let sent = 0;
-  a.chars[0].onSet(() => { sent += 1; });
-  sealForPutAway(a);
-  assert.strictEqual(a.chars[0].setHandler, null, 'onSet 이 남아 있다');
-  assert.strictEqual(sent, 0);
+check('⛔쓰기 권한이 없는 특성에는 쓰기 처리기를 달지 않는다', () => {
+  const c = mkChar(26, ['pr', 'ev']);
+  sealForPutAway({ services: [{ characteristics: [c] }] });
+  assert.strictEqual(c.setHandler, undefined);
 });
 
 check('⛔값이 없는 특성은 건드리지 않는다 (hap 이 경고를 낸다)', () => {
@@ -297,61 +376,71 @@ check('⛔값이 없는 특성은 건드리지 않는다 (hap 이 경고를 낸�
   assert.strictEqual(touched, 0, 'value 가 null 인데 updateValue 를 불렀다');
 });
 
+check('⛔기기 정보 서비스(Identify)는 건드리지 않는다', () => {
+  const c = mkChar(false);
+  c.on('set', () => {});
+  assert.strictEqual(sealForPutAway({ services: [{ UUID: '0000003E-0000-1000-8000-0026BB765291', characteristics: [c] }] }), 0);
+  assert.strictEqual(c.listenerCount('set'), 1, 'hap 의 식별 리스너를 뗐다');
+});
+
+check('★배열을 받아 여러 액세서리를 한 번에 봉하고, 같은 것은 한 번만 센다', () => {
+  const a = mkAcc([1]); const b = mkAcc([0]);
+  a.chars[0].onGet(() => 1); b.chars[0].onGet(() => 0);
+  assert.strictEqual(sealForPutAway([a, b, a, null, undefined]), 2);
+});
+
 check('⛔한 특성이 실패해도 나머지를 계속 봉한다', () => {
   const a = mkAcc([1, 1]);
   a.chars[0].removeOnGet = () => { throw new Error('깨진 특성'); };
   a.chars[1].onGet(() => { throw new Error('x'); });
   assert.doesNotThrow(() => sealForPutAway(a));
-  assert.strictEqual(a.chars[1].getHandler, null, '뒤 특성이 안 봉해졌다');
+  assert.strictEqual(a.chars[1].getHandler, undefined, '뒤 특성이 안 봉해졌다');
 });
 
 check('⛔액세서리가 없거나 서비스가 없어도 던지지 않는다', () => {
   assert.strictEqual(sealForPutAway(null), 0);
   assert.strictEqual(sealForPutAway({}), 0);
   assert.strictEqual(sealForPutAway({ services: [{}] }), 0);
+  assert.strictEqual(sealForPutAway([]), 0);
 });
 
-/* ── ⑨ 구조 회귀 — 게이트가 seal 을 부르는가 ──── */
-check('AirPurifierAccessory.js — 게이트가 sealForPutAway 를 부른다', () => {
+check('봉인 0건 문구에 감시 어휘가 없고 단답형이다', () => {
+  assert.deepStrictEqual(vocabHits([PUT_AWAY_SEAL_EMPTY]), []);
+  assert.ok(PUT_AWAY_SEAL_EMPTY.length <= 24 && !/[.!?]/.test(PUT_AWAY_SEAL_EMPTY));
+});
+
+/* ── ⑨ 구조 회귀 — 게이트가 seal 을 부르는가 (주석 제거 후) ──── */
+const SEAL_AT = [
+  ['lib/airpurifier/AirPurifierAccessory.js', 'sealForPutAway(owned)', 'this.connectWithRetry()'],
+  ['lib/powerstrip/PowerStripAccessory.js', 'sealForPutAway(this.accessory)', 'this.connect();'],
+  ['lib/humidifier/HumidifierAccessory.js', 'sealForPutAway(this.accessory)', 'this.connect();'],
+  ['lib/airmonitor/AirMonitorAccessory.js', 'sealForPutAway(this.accessory)', 'this.startPolling();'],
+];
+for (const [rel, seal, comm] of SEAL_AT) {
+  check(`${path.basename(rel)} — 게이트가 sealForPutAway 를 부른다`, () => {
+    const s = SRC(rel);
+    const g = s.indexOf('isPutAway(');
+    const k = s.indexOf(seal, g);
+    const c = s.indexOf(comm);
+    assert.ok(k !== -1, `seal 호출이 없다(${seal}) — 타일이 「응답 없음」이 된다`);
+    assert.ok(g < k && k < c, `위치가 틀렸다 (gate=${g}, seal=${k}, comm=${c})`);
+  });
+}
+check('AirPurifierAccessory.js — ★자식 타일(별도 액세서리)까지 봉한다', () => {
   const s = SRC('lib/airpurifier/AirPurifierAccessory.js');
-  const g = s.indexOf('isPutAway(');
-  const k = s.indexOf('sealForPutAway(', g);
-  const c = s.indexOf('this.connectWithRetry()');
-  assert.ok(k !== -1, 'seal 호출이 없다 — 타일이 「응답 없음」이 된다');
-  assert.ok(g < k && k < c, `위치가 틀렸다 (gate=${g}, seal=${k}, comm=${c})`);
-});
-check('PowerStripAccessory.js — 게이트가 sealForPutAway 를 부른다', () => {
-  const s = SRC('lib/powerstrip/PowerStripAccessory.js');
-  const g = s.indexOf('isPutAway(');
-  const k = s.indexOf('sealForPutAway(', g);
-  const c = s.indexOf('this.connect();');
-  assert.ok(k !== -1, 'seal 호출이 없다 — 타일이 「응답 없음」이 된다');
-  assert.ok(g < k && k < c, `위치가 틀렸다 (gate=${g}, seal=${k}, comm=${c})`);
-});
-check('HumidifierAccessory.js — 게이트가 sealForPutAway 를 부른다', () => {
-  const s = SRC('lib/humidifier/HumidifierAccessory.js');
-  const g = s.indexOf('isPutAway(');
-  const k = s.indexOf('sealForPutAway(', g);
-  const c = s.indexOf('this.connect();');
-  assert.ok(k !== -1, 'seal 호출이 없다 — 타일이 「응답 없음」이 된다');
-  assert.ok(g < k && k < c, `위치가 틀렸다 (gate=${g}, seal=${k}, comm=${c})`);
-});
-check('AirMonitorAccessory.js — 게이트가 sealForPutAway 를 부른다', () => {
-  const s = SRC('lib/airmonitor/AirMonitorAccessory.js');
-  const g = s.indexOf('isPutAway(');
-  const k = s.indexOf('sealForPutAway(', g);
-  const c = s.indexOf('this.startPolling();');
-  assert.ok(k !== -1, 'seal 호출이 없다 — 타일이 「응답 없음」이 된다');
-  assert.ok(g < k && k < c, `위치가 틀렸다 (gate=${g}, seal=${k}, comm=${c})`);
+  assert.ok(/const owned = \[this\.accessory, \.\.\.Object\.values\(this\.child\)\.map\(c => c && c\.acc\)\];/.test(s),
+    '자식 액세서리를 안 넘긴다 — 자식 스위치 탭이 본체 타일을 0 으로 덮는다');
 });
 
-check('FanAccessory.js — 서비스를 만든 뒤에 seal 한다', () => {
+check('FanAccessory.js — 서비스를 만든 뒤에 seal 하고, 설정값이 컨트롤러로 넘어간다', () => {
   const s = SRC('lib/fan/FanAccessory.js');
   const setup = s.indexOf('this.setupAccessoryServices();');
-  const seal = s.indexOf('sealForPutAway(');
+  const seal = s.indexOf('sealForPutAway(this.fanAccesory)');
   assert.ok(setup !== -1 && seal !== -1, 'seal 호출이 없다');
-  assert.ok(setup < seal, 'seal 이 서뱄스 생성보다 앞이다 — 뗄 것이 없다');
-  assert.ok(/this\.putAway\)\s*sealForPutAway|putAway\) sealForPutAway/.test(s), 'putAway 조건 없이 항상 seal 한다');
+  assert.ok(setup < seal, 'seal 이 서비스 생성보다 앞이다 — 뗄 것이 없다');
+  assert.ok(/this\.putAway\s*&&\s*sealForPutAway\(this\.fanAccesory\)/.test(s), 'putAway 조건 없이 항상 seal 한다');
+  assert.ok(/this\.putAway\s*=\s*isPutAway\(config\);/.test(s), '설정에서 putAway 를 읽지 않는다');
+  assert.ok(/this\.fanController\.putAway\s*=\s*this\.putAway;/.test(s), '컨트롤러로 넘기지 않는다 — 배선 끊김');
 });
 
 console.log(`\nput_away: ${total - failed}/${total} 통과`);
