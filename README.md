@@ -103,6 +103,10 @@ npm i -g homebridge-xiaomi-km81
 
 - 멀티탭: `protocolMode`(auto/miot/legacy — auto는 legacy가 실제 성공할 때만 확정)
 - 가습기: 모델별 부저/LED/온습도 센서 옵션 (`enable…`)
+  - 모드 선택 = **자동**(기기 자동·습도 모드) / **가습**(수동 단계 — 마지막에 쓰던 단계로 돌아감). 두 라벨은 홈 앱이 정합니다.
+  - 속도 = 수동 단계만(자동일 때는 0%로 표시). 단계를 고르면 수동으로 바뀝니다.
+  - 목표 습도 = 눈금이 실제 %(0~최대). 기기 하한보다 낮게 끌면 하한으로 되돌아갑니다.
+  - 건조 모드(스윙 토글)·어린이 잠금은 기본으로 내보내지 않습니다 — `enableDryModeSwing` / `enableChildLock` 으로 켭니다.
 - 공기측정기: 센서별 노출 옵션 (`enableAirQualitySensor` / `enableTemperatureSensor` / `enableHumiditySensor` / `enableCarbonDioxideSensor`)
 
 ## MiCloud (클라우드 제어) — 선택
