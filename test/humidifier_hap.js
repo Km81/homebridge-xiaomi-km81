@@ -198,22 +198,55 @@ const CA1_ON = { power: 'on', mode: 'auto', humidity: 54, child_lock: 'off', dry
     assert.strictEqual(val(svc, TS), TS.HUMIDIFIER, '단계를 골랐는데 선택기가 「자동」에 남았다');
   });
 
-  await t('0 을 써도 아무것도 보내지 않는다(전원은 Active 가 맡는다)', async () => {
+  await t('★0 으로 내리면 끈다 — 슬라이더는 실제 단계로 되돌아간다', async () => {
+    const { h, svc } = mk(CA1);
+    feed(h, Object.assign({}, CA1_ON, { mode: 'medium' }));
+    await tap(svc, C.RotationSpeed, 0);
+    assert.deepStrictEqual(calls, [['power', 'off', 'set_power']]);
+    assert.strictEqual(val(svc, C.Active), C.Active.INACTIVE);
+    assert.strictEqual(val(svc, C.RotationSpeed), 2, '꺼진 뒤 슬라이더가 0 에 남았다(다음에 켜면 단계가 거짓)');
+  });
+
+  await t('⛔켜기 직후의 0 은 끄지 않는다(자동일 때 표시값 0 이 되돌아온 경우)', async () => {
+    const { h, svc } = mk(CA1);
+    feed(h, Object.assign({}, CA1_ON, { power: 'off' }));
+    await svc.getCharacteristic(C.Active).handleSetRequest(C.Active.ACTIVE, undefined);
+    await svc.getCharacteristic(C.RotationSpeed).handleSetRequest(0, undefined);
+    await flush();
+    assert.deepStrictEqual(calls, [['power', 'on', 'set_power']], '켜자마자 껐다');
+    assert.strictEqual(h.cache.power, 'on');
+  });
+
+  console.log('── ④ 목표 습도: 눈금 0~100, 기기 범위로 잘라 세운다 ──');
+
+  await t('★눈금 = 0~100, 1 단위 (캐시에 옛 눈금이 남아 있어도 되돌린다)', async () => {
+    const accessories = new Map();
+    const ip = '192.168.99.201';
+    const a = mk(CA1, {}, accessories, ip);
+    a.svc.getCharacteristic(C.RelativeHumidityHumidifierThreshold).setProps({ minValue: 0, maxValue: 80, minStep: 1 });   // 2.5.0 이 남긴 눈금
+    const b = mk(CA1, {}, accessories, ip);
+    const p = b.svc.getCharacteristic(C.RelativeHumidityHumidifierThreshold).props;
+    assert.deepStrictEqual([p.minValue, p.maxValue, p.minStep], [0, 100, 1]);
+  });
+
+  await t('★상한 위로 끌면 상한을 보내고 슬라이더도 상한에 선다', async () => {
     const { h, svc } = mk(CA1);
     feed(h, CA1_ON);
-    await tap(svc, C.RotationSpeed, 0);
-    assert.deepStrictEqual(calls, []);
+    await tap(svc, C.RelativeHumidityHumidifierThreshold, 95);
+    assert.deepStrictEqual(calls[calls.length - 1], ['limit_hum', 80, 'set_limit_hum'], '기기가 거부하는 값을 보냈다');
+    assert.strictEqual(val(svc, C.RelativeHumidityHumidifierThreshold), 80, '슬라이더가 95 에 남았다(기기는 80)');
   });
 
-  console.log('── ④ 목표 습도: 눈금 0~최대 ──');
-
-  await t('눈금 = 0~80, 1 단위', async () => {
-    const { svc } = mk(CA1);
-    const p = svc.getCharacteristic(C.RelativeHumidityHumidifierThreshold).props;
-    assert.deepStrictEqual([p.minValue, p.maxValue, p.minStep], [0, 80, 1]);
+  await t('★0 으로 내리면 끈다 — 목표 습도는 쓰지 않고 슬라이더는 기기 값으로', async () => {
+    const { h, svc } = mk(CA1);
+    feed(h, CA1_ON);
+    await tap(svc, C.RelativeHumidityHumidifierThreshold, 0);
+    assert.deepStrictEqual(calls, [['power', 'off', 'set_power']]);
+    assert.strictEqual(val(svc, C.Active), C.Active.INACTIVE);
+    assert.strictEqual(val(svc, C.RelativeHumidityHumidifierThreshold), 50, '슬라이더가 0 에 남았다(기기 목표는 50)');
   });
 
-  await t('기기 값을 그대로 보여 준다(80 = 꽉 참, 30 = 30/80)', async () => {
+  await t('기기 값을 그대로 보여 준다', async () => {
     const { h, svc } = mk(CA1);
     for (const v of [80, 30, 45]) {
       feed(h, Object.assign({}, CA1_ON, { limit_hum: v }));
